@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.3.3
+// @version      3.3.4
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -57,7 +57,7 @@
 
   const MODEL_SOURCES = [
     {
-      url: 'https://registry.npmmirror.com/captcha-ocr-model/-/captcha-ocr-model-1.0.0.tgz',
+      url: 'https://registry.npmmirror.com/captcha-ocr-model/-/captcha-ocr-model-1.0.1.tgz',
       tgz: true,
       tag: '①',
       name: 'npmmirror（最快）',
