@@ -208,6 +208,10 @@ tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionS
 | 15 张真实验证码，裁剪前后识别结果 | **完全一致** |
 | 单张推理 | 35~45 ms |
 
+> **许可**：ddddocr 以 MIT 发布，允许修改与再分发。裁剪后的模型同为 MIT，
+> 原始版权声明与改动说明见仓库根目录的
+> [`THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md)。
+
 裁剪脚本在 `dev/`（不进仓库），思路是用 onnxruntime 载入原模型、切掉最后的 Gemm 层输出维度、再导出。
 
 ---
@@ -308,3 +312,7 @@ dist/auto-login/
 每个版本的可读说明在 [Releases](https://github.com/Ryan-alpaca/hbut-kit/releases)。
 
 装好之后不需要手动更新 —— 脚本带 `@updateURL`，篡改猴会自动检查新版本。
+
+---
+
+本脚本以 **MIT** 许可发布，见仓库根目录 [`LICENSE`](../../LICENSE)。

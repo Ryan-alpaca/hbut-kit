@@ -103,6 +103,18 @@
 
 ---
 
+## 许可
+
+本仓库以 **MIT** 许可发布，见 [`LICENSE`](LICENSE)。
+
+脚本用到的第三方作品（ddddocr 的 OCR 模型、onnxruntime-web）各自的版权声明
+保留在 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) 里。
+其中 `dist/auto-login/models/captcha_cropped.onnx` 是 ddddocr 模型的**裁剪版本**，
+同为 MIT，按许可要求附上了原始声明与改动说明。
+
+---
+
 ## 免责
 
 仅供个人学习自用，与学校无关。使用前请自行确认是否符合学校相关规定。
+
