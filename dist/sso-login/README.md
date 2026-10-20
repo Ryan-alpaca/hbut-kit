@@ -3,7 +3,7 @@
 打开 `auth.hbut.edu.cn` 登录页，脚本自动认出图形验证码并提交登录。
 **OCR 完全跑在浏览器里**，不需要任何后台程序、不需要服务器。
 
-> 当前版本：**v3.1.1** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
+> 当前版本：**v3.2.0** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
 
 ---
 
@@ -31,17 +31,24 @@
 
 打开登录页，脚本会自动下载 **5 MB** 的识别模型，存进浏览器 IndexedDB，**只下一次**。
 
-模型发布在 npm 上（[`captcha-ocr-model`](https://www.npmjs.com/package/captcha-ocr-model)），脚本按以下顺序尝试下载源：
+模型**本仓库里就有一份**（[`models/captcha_cropped.onnx`](models/captcha_cropped.onnx)），
+同时发布在 npm 上（[`captcha-ocr-model`](https://www.npmjs.com/package/captcha-ocr-model)）。
+脚本按以下顺序尝试，前一个失败才试下一个：
 
 | 顺序 | 来源 | 说明 |
 |---|---|---|
-| 1 | `registry.npmmirror.com` 的 tarball | gzip 压缩，5.0 MB → 3.6 MB，约 3.5 s |
-| 2 | `unpkg.com` | 裸文件，13~36 s |
-| 3 | `cdn.jsdelivr.net` | 裸文件，同上 |
+| 1 | `registry.npmmirror.com` 的 npm tarball | gzip 压缩，5.0 MB → 3.6 MB，约 1.4 s。**国内最快** |
+| 2 | **jsDelivr 的 GitHub 通道**（本仓库） | 不依赖 npm 包是否还在，国内多数网络可通 |
+| 3 | **GitHub raw**（本仓库） | 最可靠，但国内常被 RST，所以只给 **20 s** 超时，快速放弃 |
+| 4 | `unpkg.com` | npm 裸文件，13~36 s |
+| 5 | `cdn.jsdelivr.net/npm` | npm 裸文件，同上 |
+
+**为什么要有第 2、3 条**：前三条里有两条挂在 npm 上。万一 `captcha-ocr-model` 这个包被删、
+或者 npm 镜像抽风，只要 GitHub 仓库还在，脚本照样能拿到模型。
 
 tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionStream` 解开，不需要额外依赖。
 
-**只有三个源全部失败时**才会弹手动选择面板 —— 那时手动选本地的 `models/captcha_cropped.onnx` 即可。
+**只有 5 个源全部失败时**才会弹手动选择面板 —— 那时手动选本地的 `models/captcha_cropped.onnx` 即可。
 
 > ⚠️ 脚本 `@require` 了 `registry.npmmirror.com` 上的 `onnxruntime-web`。如果这个 CDN 不可达，脚本会尝试 unpkg / jsDelivr 上的备用副本。
 
@@ -188,7 +195,7 @@ tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionS
    脚本策略：验证码错就换图重试，**密码错立刻停手**。整页提交最多 3 次。
 3. **页面改版可能失效**。脚本依赖 `#pwdFromId`、`#username`、`#password` 等 id。
 4. **脚本保存模式下密码是明文**，自己权衡。
-5. **依赖外部 CDN**（npmmirror / unpkg / jsDelivr）。全挂了需要手动指定本地模型。
+5. **依赖外部 CDN**（npmmirror / jsDelivr / GitHub raw / unpkg）。五个源全挂需要手动指定本地模型。
 6. **只在 Edge / Chrome 上实测过**，Firefox 未验证（`DecompressionStream` 需要 113+）。
 
 ---
@@ -200,7 +207,9 @@ tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionS
 ```
 dist/sso-login/
 ├── README.md
-└── hbut-auto-login.user.js     装进篡改猴
+├── hbut-auto-login.user.js           装进篡改猴
+└── models/
+    └── captcha_cropped.onnx          5 MB 模型（自动下载的兜底，也是 GitHub 源的本体）
 ```
 
 `dev/sso-login/`（不进仓库）里有：
@@ -217,3 +226,17 @@ dist/sso-login/
 | `dev/test_v3.py` | 带面板 + 脚本保存模式回归 |
 | `dev/test_v3_ui.py` | 面板与设置面板 UI 测试 |
 | `npm-package/` | 发布到 npm 的模型包源码 |
+
+---
+
+## 十、更新记录
+
+### v3.2.0
+
+- **模型进仓库**：`models/captcha_cropped.onnx` 随仓库分发，不再只依赖 npm 包
+- **新增两个 GitHub 兜底源**：jsDelivr 的 GitHub 通道、GitHub raw。npm 包万一被删也不影响使用
+- **补上 `@grant GM_xmlhttpRequest`**。这是 v3.1.1 的一个**潜在缺陷**：脚本用了
+  `GM_xmlhttpRequest` 下载模型，但 `@grant` 里没声明它。Tampermonkey 在指定了其它
+  `@grant` 的脚本里只暴露被授权的 API，所以这一句在部分环境会直接 `ReferenceError`，
+  表现是「模型下载一直失败、只能手动选文件」。
+- GitHub raw 单独给 20 s 超时，避免国内被 RST 时卡满 180 s

@@ -11,7 +11,7 @@
 | 脚本 | 版本 | 适配域名 |
 |---|---|---|
 | [湖工大选课助手](dist/course-helper/) | v4.0.4 | `jwxt.hbut.edu.cn` |
-| [湖工大统一认证 · 自动登录](dist/sso-login/) | v3.1.1 | `auth.hbut.edu.cn` |
+| [湖工大统一认证 · 自动登录](dist/sso-login/) | v3.2.0 | `auth.hbut.edu.cn` |
 
 ---
 

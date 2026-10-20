@@ -5,7 +5,7 @@
 | # | 目录 | 脚本 | 版本 | 适配域名 |
 |---|---|---|---|---|
 | 01 | [`course-helper/`](course-helper/) | 湖工大选课助手 | v4.0.4 | `jwxt.hbut.edu.cn` |
-| 02 | [`sso-login/`](sso-login/) | 湖工大统一认证 · 自动登录 | v3.1.1 | `auth.hbut.edu.cn` |
+| 02 | [`sso-login/`](sso-login/) | 湖工大统一认证 · 自动登录 | v3.2.0 | `auth.hbut.edu.cn` |
 
 ## 目录约定
 

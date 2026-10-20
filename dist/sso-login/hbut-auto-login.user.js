@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.1.1
+// @version      3.2.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -11,9 +11,11 @@
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_xmlhttpRequest
 // @connect      registry.npmmirror.com
 // @connect      unpkg.com
 // @connect      cdn.jsdelivr.net
+// @connect      raw.githubusercontent.com
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
@@ -31,18 +33,40 @@
   const DB_STORE = 'models';
   const DB_KEY = 'captcha_v1';
 
-  // 模型下载源，按顺序尝试。
+  // 模型下载源，按顺序尝试，前一个失败才试下一个。
   //
-  // 首选 npmmirror 的 tarball：它的 /files/ 路径对新包有白名单限制（403），
-  // 但标准 tarball 路径不受限，而且是 gzip 压缩过的（5.0MB -> 3.6MB），
-  // 实测 1.4 秒。浏览器用 DecompressionStream 解开就行。
+  // 顺序是按「国内可达性 + 速度」排的，不是随手排的：
   //
-  // 后面两个是直接取裸文件的备用源（unpkg / jsDelivr），实测 13~36 秒，
-  // 慢但能兜底。全挂掉就回落到手动选文件。
+  // ① npmmirror 的 tarball —— 它的 /files/ 路径对新包有白名单限制（403），
+  //    但标准 tarball 路径不受限，而且是 gzip 压缩过的（5.0MB -> 3.6MB），
+  //    实测 1.4 秒。浏览器用 DecompressionStream 解开就行。国内最快。
+  //
+  // ② jsDelivr 的 GitHub 通道 —— 直接从本仓库取模型，不依赖 npm 包是否还在。
+  //    jsDelivr 在国内多数网络能通，是「npm 包被删 / 被墙」时的第一道兜底。
+  //
+  // ③ GitHub raw —— 最原始也最可靠（只要仓库还在），但国内常被 RST，
+  //    所以给了短超时（20s），不通就快速放弃，不拖住整个流程。
+  //
+  // ④⑤ 另外两个 npm 裸文件源，实测 13~36 秒，慢但能兜底。
+  //
+  // 全部挂掉就回落到「手动选本地 models/captcha_cropped.onnx」。
+  const GH_RAW_BASE = 'https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/models/';
+  const GH_JSD_BASE = 'https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/sso-login/models/';
+
   const MODEL_SOURCES = [
     {
       url: 'https://registry.npmmirror.com/captcha-ocr-model/-/captcha-ocr-model-1.0.0.tgz',
       tgz: true,
+    },
+    {
+      url: GH_JSD_BASE + 'captcha_cropped.onnx',
+      tgz: false,
+      timeout: 120000,
+    },
+    {
+      url: GH_RAW_BASE + 'captcha_cropped.onnx',
+      tgz: false,
+      timeout: 20000,
     },
     {
       url: 'https://unpkg.com/captcha-ocr-model@latest/models/captcha_cropped.onnx',
@@ -418,13 +442,13 @@
 
   // 从 CDN 下载模型二进制。GM_xmlhttpRequest 走扩展层，
   // 不受页面 CORS 限制，所以能直接取二进制。
-  function downloadModel(url, onProgress) {
+  function downloadModel(url, onProgress, timeoutMs) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: 'GET',
         url,
         responseType: 'arraybuffer',
-        timeout: 180000,
+        timeout: timeoutMs || 180000,
         onprogress: (e) => {
           if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
         },
@@ -493,7 +517,7 @@
           setStatus(`正在下载识别模型（${i + 1}/${MODEL_SOURCES.length}）…`, 'busy');
           let raw = await downloadModel(src.url, (p) => {
             setStatus(`正在下载识别模型 ${Math.round(p * 100)}%`, 'busy');
-          });
+          }, src.timeout);
           if (src.tgz) {
             setStatus('正在解压模型…', 'busy');
             raw = await extractOnnxFromTgz(raw);
