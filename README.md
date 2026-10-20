@@ -13,8 +13,8 @@
 
 | 脚本 | 版本 | 适配域名 | 安装 |
 |---|---|---|---|
-| 湖工大选课助手 | v4.0.4 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
-| 统一认证 · 自动登录 | v3.3.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
+| 湖工大选课助手 | v4.0.5 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
+| 统一认证 · 自动登录 | v3.3.1 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
 
 > **国内打不开 `raw.githubusercontent.com`？** 用下面的 jsDelivr 镜像，效果一样。
 
@@ -29,6 +29,24 @@
 2. 粘贴对应 `.user.js` 全文 → 保存
 
 详细说明见各目录下的 `README.md`。
+
+### 自动更新
+
+两个脚本都带 `@updateURL` / `@downloadURL`，指向本仓库的 raw 地址 ——
+篡改猴会自动检查新版本，**装一次就行，之后不用手动更新**。
+
+> 在 v3.3.1 / v4.0.5 之前装的版本没有这两个字段，需要手动重装一次才会进入自动更新。
+
+### 版本与更新日志
+
+| 脚本 | 当前版本 | 变更记录 |
+|---|---|---|
+| 湖工大选课助手 | v4.0.5 | [`dist/course-helper/CHANGELOG.md`](dist/course-helper/CHANGELOG.md) |
+| 统一认证 · 自动登录 | v3.3.1 | [`dist/sso-login/CHANGELOG.md`](dist/sso-login/CHANGELOG.md) |
+
+版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，
+日志格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
+每个版本另有 [Releases](https://github.com/Ryan-alpaca/hbut-kit/releases) 说明。
 
 ---
 

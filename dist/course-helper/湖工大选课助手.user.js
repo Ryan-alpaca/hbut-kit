@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         湖工大选课助手（美化 / 网课优先 / 批次区分 / 高亮跳转 / 自动降级提交）
 // @namespace    local.hbut.xkhelper
-// @version      4.0.4
+// @version      4.0.5
 // @description  选课页面辅助。默认收成右下角小圆钮。自动识别批次，美化表格（19列压到5列、两列排布、隐藏冗余表头），按 APP 优先级找学习通网课，加载失败自动重试，并在二次确认后提交选课。
 // @author       WorkBuddy
+// @updateURL    https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js
 // @match        https://jwxt.hbut.edu.cn/frontend/views/student/xkPage/*
 // @match        https://jwxt.hbut.edu.cn/admin/xsd/xkgl/*
 // @match        https://jwxt.hbut.edu.cn/*

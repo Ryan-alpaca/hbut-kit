@@ -3,7 +3,7 @@
 打开 `auth.hbut.edu.cn` 登录页，脚本自动认出图形验证码并提交登录。
 **OCR 完全跑在浏览器里**，不需要任何后台程序、不需要服务器。
 
-> 当前版本：**v3.3.0** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
+> 当前版本：**v3.3.1** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
 
 ---
 
@@ -300,26 +300,11 @@ dist/sso-login/
 
 ---
 
-## 十、更新记录
+---
 
-### v3.3.0
+## 十、版本
 
-- **加载过程可视化**：状态区分三行显示「第几条线路 / 哪条线路 / 进度·速度·耗时」，
-  并加了进度条。之前只有一句「正在下载识别模型 42%」，看不出走的是哪条、还要多久。
-- **可中断**：新增「中断」按钮，真调 `GM_xmlhttpRequest` 的 `abort()`，
-  中断后不会偷偷换下一条。
-- **可手动选线路**：面板新增「线路」下拉（自动 / 五条线路 / 手动导入），
-  选择持久化；下载中换线路会立刻中断当前这条并按新线路重来。
-- 修：手动导入对话框会盖住面板，导致「换线路」点不到 —— 换线路时自动关掉它
-- 修：「模型就绪」那一行会被紧接着的「正在加载识别引擎…」覆盖，等于用户看不到；
-  现在把来源并进加载提示里
+当前版本见本页顶部。完整变更记录在 [`CHANGELOG.md`](CHANGELOG.md)，
+每个版本的可读说明在 [Releases](https://github.com/Ryan-alpaca/hbut-kit/releases)。
 
-### v3.2.0
-
-- **模型进仓库**：`models/captcha_cropped.onnx` 随仓库分发，不再只依赖 npm 包
-- **新增两个 GitHub 兜底源**：jsDelivr 的 GitHub 通道、GitHub raw。npm 包万一被删也不影响使用
-- **补上 `@grant GM_xmlhttpRequest`**。这是 v3.1.1 的一个**潜在缺陷**：脚本用了
-  `GM_xmlhttpRequest` 下载模型，但 `@grant` 里没声明它。Tampermonkey 在指定了其它
-  `@grant` 的脚本里只暴露被授权的 API，所以这一句在部分环境会直接 `ReferenceError`，
-  表现是「模型下载一直失败、只能手动选文件」。
-- GitHub raw 单独给 20 s 超时，避免国内被 RST 时卡满 180 s
+装好之后不需要手动更新 —— 脚本带 `@updateURL`，篡改猴会自动检查新版本。

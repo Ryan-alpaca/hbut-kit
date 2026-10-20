@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.3.0
+// @version      3.3.1
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan
 // @match        https://auth.hbut.edu.cn/authserver/login*
+// @updateURL    https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js
 // @require      https://registry.npmmirror.com/onnxruntime-web/1.20.0/files/dist/ort.min.js
 // @grant        unsafeWindow
 // @grant        GM_getValue
