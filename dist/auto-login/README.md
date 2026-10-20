@@ -3,7 +3,7 @@
 打开 `auth.hbut.edu.cn` 登录页，脚本自动认出图形验证码并提交登录。
 **OCR 完全跑在浏览器里**，不需要任何后台程序、不需要服务器。
 
-> 当前版本：**v3.3.2** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
+> 当前版本：**v3.3.3** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
 
 ---
 
@@ -25,11 +25,11 @@
 
 **一键安装**：
 
-[![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js)
+[![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js)
 
 点徽章会跳到 `raw.githubusercontent.com`，篡改猴自动接管并弹出安装页。
 国内打不开 raw 的话用 jsDelivr 镜像：
-[一键安装（镜像）](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/sso-login/hbut-auto-login.user.js)
+[一键安装（镜像）](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/auto-login/hbut-auto-login.user.js)
 
 **手动安装**：
 
@@ -276,14 +276,14 @@ tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionS
 仓库里只有脚本本体：
 
 ```
-dist/sso-login/
+dist/auto-login/
 ├── README.md
 ├── hbut-auto-login.user.js           装进篡改猴
 └── models/
     └── captcha_cropped.onnx          5 MB 模型（自动下载的兜底，也是 GitHub 源的本体）
 ```
 
-`dev/sso-login/`（不进仓库）里有：
+`dev/auto-login/`（不进仓库）里有：
 
 | 文件 | 作用 |
 |---|---|

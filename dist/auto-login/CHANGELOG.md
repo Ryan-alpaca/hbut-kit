@@ -17,6 +17,21 @@
 
 ---
 
+## [3.3.3] - 2026-10-20
+
+### 变更（需要重装）
+- **目录 `dist/sso-login/` 改名为 `dist/auto-login/`**，与 `@namespace local.hbut.autologin`
+  和脚本文件名 `hbut-auto-login.user.js` 对齐。
+- 连带更新的地址：
+  - `@updateURL` / `@downloadURL`
+  - 模型的两个 GitHub 兜底源（`GH_RAW_BASE` / `GH_JSD_BASE`）
+  - README 里的安装链接
+
+> ⚠️ **旧版的自动更新会失效**：它记录的更新地址还是 `dist/sso-login/...`，改名后 404。
+> 请手动重装一次，新版本的更新地址就指向新路径了。
+
+---
+
 ## [3.3.2] - 2026-10-20
 
 ### 变更

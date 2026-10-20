@@ -14,14 +14,14 @@
 | 脚本 | 版本 | 适配域名 | 安装 |
 |---|---|---|---|
 | 湖工大选课助手 | v4.1.0 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
-| 统一认证 · 自动登录 | v3.3.2 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
+| 统一认证 · 自动登录 | v3.3.3 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js) |
 
 > **国内打不开 `raw.githubusercontent.com`？** 用下面的 jsDelivr 镜像，效果一样。
 
 | 脚本 | 镜像安装 |
 |---|---|
 | 湖工大选课助手 | [jsDelivr](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
-| 统一认证 · 自动登录 | [jsDelivr](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/sso-login/hbut-auto-login.user.js) |
+| 统一认证 · 自动登录 | [jsDelivr](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/auto-login/hbut-auto-login.user.js) |
 
 ### 手动安装（链接都失效时）
 
@@ -35,14 +35,14 @@
 两个脚本都带 `@updateURL` / `@downloadURL`，指向本仓库的 raw 地址 ——
 篡改猴会自动检查新版本，**装一次就行，之后不用手动更新**。
 
-> 在 v3.3.2 / v4.1.0 之前装的版本没有这两个字段，需要手动重装一次才会进入自动更新。
+> 在 v3.3.3 / v4.1.0 之前装的版本没有这两个字段，需要手动重装一次才会进入自动更新。
 
 ### 版本与更新日志
 
 | 脚本 | 当前版本 | 变更记录 |
 |---|---|---|
 | 湖工大选课助手 | v4.1.0 | [`dist/course-helper/CHANGELOG.md`](dist/course-helper/CHANGELOG.md) |
-| 统一认证 · 自动登录 | v3.3.2 | [`dist/sso-login/CHANGELOG.md`](dist/sso-login/CHANGELOG.md) |
+| 统一认证 · 自动登录 | v3.3.3 | [`dist/auto-login/CHANGELOG.md`](dist/auto-login/CHANGELOG.md) |
 
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，
 日志格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
@@ -88,7 +88,7 @@
 │   ├── course-helper/
 │   │   ├── README.md
 │   │   └── 湖工大选课助手.user.js
-│   └── sso-login/
+│   └── auto-login/
 │       ├── README.md
 │       ├── hbut-auto-login.user.js
 │       └── models/
@@ -96,7 +96,7 @@
 │
 └── dev/                      ← 开发目录（不提交，见 .gitignore）
     ├── build/  tools/  tests/  debug/  docs/  data/     选课助手的开发文件
-    └── sso-login/                                       自动登录的开发文件
+    └── auto-login/                                       自动登录的开发文件
 ```
 
 **`dist/` 是给使用者的，`dev/` 是给开发者的。** 前者进仓库，后者不进。
