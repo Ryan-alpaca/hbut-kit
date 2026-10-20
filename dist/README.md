@@ -5,7 +5,7 @@
 | # | 目录 | 脚本 | 版本 | 适配域名 | 一键安装 |
 |---|---|---|---|---|---|
 | 01 | [`course-helper/`](course-helper/) | 湖工大选课助手 | v4.1.0 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
-| 02 | [`auto-login/`](auto-login/) | 湖工大统一认证 · 自动登录 | v3.4.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js) |
+| 02 | [`auto-login/`](auto-login/) | 湖工大统一认证 · 自动登录 | v3.5.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js) |
 
 > 国内打不开 `raw.githubusercontent.com` 的话，把链接里的
 > `raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/`

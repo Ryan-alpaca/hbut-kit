@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.4.0
+// @version      3.5.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -140,6 +140,35 @@
   }
 
   // =========================================================================
+  // 全屏成功层
+  // ---------------------------------------------------------------------------
+  // ⚠️ 这是「乐观播放」：在提交之前播完。因为 CAS 登录成功后浏览器会立刻 302
+  //   跳转、页面被销毁，任何"提交后再播"的动画都会被掐断。
+  //   代价：验证码错时也会先播一遍，随后页面跳到错误页。
+  //   动画播完（约 0.72s）才真正提交；层本身不主动移除，让跳转自然带它走，
+  //   另设 3s 兜底移除，避免提交失败时糊住页面。
+  // =========================================================================
+  function playSuccessOverlay() {
+    if (!animOn() || !UI.root) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let layer = null;
+      try {
+        layer = document.createElement('div');
+        layer.className = 'ok-layer';
+        layer.innerHTML =
+          '<svg class="ok-ck" viewBox="0 0 120 120">' +
+            '<path d="M28 62l22 22 42-44"/></svg>';
+        UI.root.appendChild(layer);
+        setTimeout(() => { try { if (layer && layer.parentNode) layer.parentNode.removeChild(layer); } catch (e) {} }, 3000);
+      } catch (e) {
+        return resolve();
+      }
+      setTimeout(resolve, 720);
+    });
+  }
+
+  // =========================================================================
   // 控制面板（常驻，shadow DOM 隔离样式，避免被页面 CSS 污染）
   // =========================================================================
   const UI = {
@@ -251,6 +280,29 @@
       .cap-anim span, .cap-anim .cap-bar, .cap-anim .ck, .cap-anim .ck path { animation: none; opacity: 1; }
       .cap-anim .cap-bar { width: 100%; }
       .cap-anim .ck path { stroke-dashoffset: 0; }
+    }
+
+    /* ---- 全屏成功层：绿色从中心铺满 + 对勾画出 ---- */
+    .ok-layer {
+      position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(160deg, #34d399 0%, #16a34a 100%);
+      clip-path: circle(0% at 50% 50%);
+      animation: okSweep .40s cubic-bezier(.4,0,.2,1) forwards;
+    }
+    .ok-ck { width: 160px; height: 160px; }
+    .ok-ck path {
+      fill: none; stroke: #fff; stroke-width: 9;
+      stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 100; stroke-dashoffset: 100;
+      animation: okCheck .30s ease-out .28s forwards;
+    }
+    @keyframes okSweep { to { clip-path: circle(150% at 50% 50%); } }
+    @keyframes okCheck { to { stroke-dashoffset: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ok-layer { animation: none; clip-path: circle(150% at 50% 50%); }
+      .ok-ck path { animation: none; stroke-dashoffset: 0; }
     }
   `;
 
@@ -1147,6 +1199,7 @@
 
       setStatus(`识别到验证码 ${captcha}，正在提交…`, 'busy');
       await animateCaptcha(captcha);          // 纯装饰，失败也照常提交
+      await playSuccessOverlay();             // 乐观：播完再提交
       writeState({ submit: state.submit + 1, ts: Date.now() });
       await sleep(60);
       if (submitWith(captcha)) setStatus(`已提交（${captcha}），等待服务器响应…`, 'ok');
