@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.3.4
+// @version      3.4.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -100,6 +100,7 @@
   const K_STATE = 'hbut_auto_state';
   const K_SKIP = 'hbut_auto_skip';
   const K_SRC = 'hbut_src';         // 模型线路：'' 自动 | '0'..'4' 指定 | 'manual' 手动导入
+  const K_ANIM = 'hbut_anim';       // 验证码动画：'1' 开（默认）| '0' 关
 
   const F = '#pwdFromId';           // 页面有 4 个 form，id 重复，必须限定作用域
 
@@ -209,6 +210,48 @@
     button.primary:hover:not(:disabled) { background: #1d4ed8; }
     button.primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: default; }
     .collapsed .body { display: none; }
+
+    /* ---- 验证码落入动画（覆盖在页面输入框上方，纯装饰）---- */
+    .cap-anim {
+      position: fixed; pointer-events: none; z-index: 2147483645;
+      display: flex; align-items: center; justify-content: center; gap: 2px;
+      background: #fff; border: 1px solid #93c5fd; border-radius: 6px;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.14); overflow: hidden;
+      font: 15px/1 ui-monospace, Consolas, monospace; color: #0f172a;
+    }
+    .cap-anim span {
+      width: 1ch; text-align: center;
+      opacity: 0; animation: capDrop .26s cubic-bezier(.2,.8,.3,1.2) forwards;
+    }
+    .cap-anim .cap-bar {
+      display: block; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
+      background: linear-gradient(90deg, #34d399, #16a34a);
+      animation: capFill .28s ease-out forwards;
+    }
+    .cap-anim .ck {
+      position: absolute; right: 6px; top: 50%; width: 14px; height: 14px;
+      margin-top: -7px; opacity: 0; animation: capIn .16s ease-out forwards;
+    }
+    .cap-anim .ck path {
+      stroke: #16a34a; stroke-width: 2.4; fill: none;
+      stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 24; stroke-dashoffset: 24;
+      animation: capCheck .22s ease-out forwards;
+    }
+    @keyframes capDrop {
+      0%   { transform: translateY(-14px) scale(.75); opacity: 0; }
+      70%  { transform: translateY(1px) scale(1.04);  opacity: 1; }
+      100% { transform: translateY(0) scale(1);       opacity: 1; }
+    }
+    @keyframes capFill { to { width: 100%; } }
+    @keyframes capIn   { to { opacity: 1; } }
+    @keyframes capCheck { to { stroke-dashoffset: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cap-anim span, .cap-anim .cap-bar, .cap-anim .ck, .cap-anim .ck path { animation: none; opacity: 1; }
+      .cap-anim .cap-bar { width: 100%; }
+      .cap-anim .ck path { stroke-dashoffset: 0; }
+    }
   `;
 
   function buildPanel() {
@@ -392,6 +435,65 @@
 
   function setAccount(text) {
     if (UI.accountEl) UI.accountEl.textContent = text || '—';
+  }
+
+  // =========================================================================
+  // 验证码动画：逐字落入 → 绿色进度条填满 → 打勾
+  // ---------------------------------------------------------------------------
+  // 纯装饰。任何异常、任何"输入框看不见"的情况都直接跳过并立刻返回，
+  // 绝不能因为它拖住登录。动画结束时把真实值写进 input。
+  // =========================================================================
+  const ANIM_TOTAL = 760;   // 与下面的 CSS delay 对齐：200 起填充，520 起打勾
+
+  function animOn() {
+    try {
+      if (GM_getValue(K_ANIM, '1') === '0') return false;
+      if (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+      return true;
+    } catch (e) { return true; }
+  }
+
+  function animateCaptcha(text) {
+    if (!animOn() || !UI.root || !text) return Promise.resolve();
+
+    const input = $(F + ' #captcha');
+    if (!input) return Promise.resolve();
+    const r = input.getBoundingClientRect();
+    // 看不见就别演了（滚出视口 / 隐藏）
+    if (r.width < 40 || r.height < 14 || r.bottom < 0 || r.top > (W.innerHeight || 0)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let layer = null;
+      const done = () => {
+        try { if (layer && layer.parentNode) layer.parentNode.removeChild(layer); } catch (e) {}
+        try { input.value = text; } catch (e) {}
+        resolve();
+      };
+
+      try {
+        layer = document.createElement('div');
+        layer.className = 'cap-anim';
+        layer.style.left = r.left + 'px';
+        layer.style.top = r.top + 'px';
+        layer.style.width = r.width + 'px';
+        layer.style.height = r.height + 'px';
+
+        const chars = text.split('').map((ch, i) =>
+          '<span style="animation-delay:' + (i * 45) + 'ms">' + ch + '</span>').join('');
+
+        layer.innerHTML = chars +
+          '<i class="cap-bar" style="animation-delay:200ms"></i>' +
+          '<svg class="ck" viewBox="0 0 24 24" style="animation-delay:520ms">' +
+            '<path d="M4 12.5l5 5 11-11"/></svg>';
+
+        UI.root.appendChild(layer);
+        setTimeout(done, ANIM_TOTAL);
+      } catch (e) {
+        done();
+      }
+    });
   }
 
   // =========================================================================
@@ -1044,8 +1146,9 @@
       }
 
       setStatus(`识别到验证码 ${captcha}，正在提交…`, 'busy');
+      await animateCaptcha(captcha);          // 纯装饰，失败也照常提交
       writeState({ submit: state.submit + 1, ts: Date.now() });
-      await sleep(100);
+      await sleep(60);
       if (submitWith(captcha)) setStatus(`已提交（${captcha}），等待服务器响应…`, 'ok');
     } finally {
       running = false;
@@ -1083,6 +1186,11 @@
       try { await idbPut(DB_KEY, null); } catch (e) {}
       ocrSession = null;
       setStatus('模型已清除，刷新页面后重新导入', 'ok');
+    });
+    GM_registerMenuCommand('🎬 开 / 关验证码动画', () => {
+      const off = GM_getValue(K_ANIM, '1') === '0';
+      GM_setValue(K_ANIM, off ? '1' : '0');
+      setStatus(off ? '验证码动画已开启' : '验证码动画已关闭', 'ok');
     });
     GM_registerMenuCommand('⏭️ 本次跳过自动登录', skipOnce);
   } catch (e) { /* 非篡改猴环境 */ }
