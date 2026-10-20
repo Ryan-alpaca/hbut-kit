@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.2.0
+// @version      3.3.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -57,24 +57,34 @@
     {
       url: 'https://registry.npmmirror.com/captcha-ocr-model/-/captcha-ocr-model-1.0.0.tgz',
       tgz: true,
+      tag: '①',
+      name: 'npmmirror（最快）',
     },
     {
       url: GH_JSD_BASE + 'captcha_cropped.onnx',
       tgz: false,
       timeout: 120000,
+      tag: '②',
+      name: 'jsDelivr·GitHub',
     },
     {
       url: GH_RAW_BASE + 'captcha_cropped.onnx',
       tgz: false,
       timeout: 20000,
+      tag: '③',
+      name: 'GitHub raw',
     },
     {
       url: 'https://unpkg.com/captcha-ocr-model@latest/models/captcha_cropped.onnx',
       tgz: false,
+      tag: '④',
+      name: 'unpkg',
     },
     {
       url: 'https://cdn.jsdelivr.net/npm/captcha-ocr-model@latest/models/captcha_cropped.onnx',
       tgz: false,
+      tag: '⑤',
+      name: 'jsDelivr·npm',
     },
   ];
 
@@ -87,6 +97,7 @@
   const K_PASS = 'hbut_pwd';
   const K_STATE = 'hbut_auto_state';
   const K_SKIP = 'hbut_auto_skip';
+  const K_SRC = 'hbut_src';         // 模型线路：'' 自动 | '0'..'4' 指定 | 'manual' 手动导入
 
   const F = '#pwdFromId';           // 页面有 4 个 form，id 重复，必须限定作用域
 
@@ -136,6 +147,14 @@
     collapsed: false,
   };
 
+  // 模型下载的运行时状态（面板按钮、状态行、进度条都读这几个）
+  let dlState = 'idle';        // idle | downloading | aborted | failed
+  let dlAborted = false;       // 本轮下载是否被用户中断
+  let restartAfterAbort = false; // 中断是为了换线路 -> 结束后自动按新线路重来
+  let activeReq = null;        // 当前 GM_xmlhttpRequest 句柄，用于 abort()
+  let activeReject = null;     // 当前下载的 reject，abort 时手动结算，避免 Promise 悬着
+  let ocrLoading = null;       // 防止 initOcr 被并发调用（换线路 / 手动重试可能撞上）
+
   const PANEL_CSS = `
     :host { all: initial; }
     * { box-sizing: border-box; }
@@ -155,23 +174,37 @@
     .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; }
     .body { padding: 10px 12px 12px; }
     .status {
-      font-size: 12.5px; line-height: 1.6; padding: 8px 10px; border-radius: 6px;
-      background: #f1f5f9; color: #334155; word-break: break-all; min-height: 34px;
+      font-size: 12.5px; line-height: 1.55; padding: 8px 10px; border-radius: 6px;
+      background: #f1f5f9; color: #334155; overflow-wrap: anywhere; min-height: 34px;
+      white-space: pre-line;   /* 只在 
+ 处换行，别把「1.5s」拆成两半 */
     }
     .status.err { background: #fef2f2; color: #b91c1c; }
     .status.ok  { background: #f0fdf4; color: #15803d; }
     .status.warn{ background: #fffbeb; color: #b45309; }
-    .row { margin-top: 8px; font-size: 12px; color: #64748b; }
+    .row { margin-top: 8px; font-size: 12px; color: #64748b;
+      display: flex; align-items: center; gap: 6px; }
     .row b { color: #334155; font-weight: 500; }
+    .row select {
+      flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px 4px;
+      border: 1px solid #cbd5e1; border-radius: 5px; background: #fff;
+      color: #334155; cursor: pointer;
+    }
+    .bar { height: 3px; background: #e2e8f0; border-radius: 2px; margin-top: 6px;
+      overflow: hidden; display: none; }
+    .bar.on { display: block; }
+    .bar > i { display: block; height: 100%; width: 0; background: #2563eb;
+      transition: width .15s linear; }
     .acts { display: flex; gap: 6px; margin-top: 10px; }
     button {
       flex: 1; padding: 6px 4px; border-radius: 6px; border: 1px solid #cbd5e1;
       background: #fff; color: #334155; font-size: 12px; cursor: pointer;
       font-family: inherit; transition: background .15s;
     }
-    button:hover { background: #f1f5f9; }
+    button:hover:not(:disabled) { background: #f1f5f9; }
+    button:disabled { color: #cbd5e1; cursor: default; }
     button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-    button.primary:hover { background: #1d4ed8; }
+    button.primary:hover:not(:disabled) { background: #1d4ed8; }
     button.primary:disabled { background: #94a3b8; border-color: #94a3b8; cursor: default; }
     .collapsed .body { display: none; }
   `;
@@ -197,9 +230,12 @@
       </div>
       <div class="body">
         <div class="status" id="status">正在初始化…</div>
+        <div class="bar" id="bar"><i id="barfill"></i></div>
         <div class="row">账号：<b id="account">—</b></div>
+        <div class="row">线路：<select id="src" title="模型下载线路"></select></div>
         <div class="acts">
           <button id="btn-set">设置</button>
+          <button id="btn-abort" disabled>中断</button>
           <button id="btn-skip">跳过</button>
         </div>
       </div>
@@ -212,6 +248,9 @@
     UI.statusEl = UI.root.getElementById('status');
     UI.accountEl = UI.root.getElementById('account');
     UI.dotEl = UI.root.getElementById('dot');
+    UI.barEl = UI.root.getElementById('bar');
+    UI.barFillEl = UI.root.getElementById('barfill');
+    UI.abortBtn = UI.root.getElementById('btn-abort');
 
     UI.root.getElementById('hdr').onclick = () => {
       UI.collapsed = !UI.collapsed;
@@ -220,6 +259,89 @@
     };
     UI.root.getElementById('btn-set').onclick = (e) => { e.stopPropagation(); openSettings(); };
     UI.root.getElementById('btn-skip').onclick = (e) => { e.stopPropagation(); skipOnce(); };
+    UI.abortBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (dlState === 'downloading') {
+        abortDownload();
+        setStatus('正在中断…', 'warn');
+      } else {
+        // 已经中断 / 失败过，这个按钮变成「重试」
+        retryDownload('重新下载模型…');
+      }
+    };
+
+    buildSrcSelect();
+    setDlState('idle');
+  }
+
+  // 线路下拉：自动 / 五条线路 / 手动导入
+  function buildSrcSelect() {
+    const sel = UI.root && UI.root.getElementById('src');
+    if (!sel) return;
+    sel.innerHTML =
+      '<option value="">自动（推荐）</option>' +
+      MODEL_SOURCES.map((s, i) => `<option value="${i}">${s.tag} ${s.name}</option>`).join('') +
+      '<option value="manual">手动导入文件</option>';
+    sel.value = GM_getValue(K_SRC, '');
+
+    sel.onchange = () => {
+      const v = sel.value;
+      GM_setValue(K_SRC, v);
+      const label = v === '' ? '自动' : (v === 'manual' ? '手动导入文件' : srcLabel(+v));
+      console.log('[湖工大自动登录] 线路切换为', label);
+
+      if (dlState === 'downloading') {
+        // 正在下载时换线路：中断当前这条，然后按新线路重来
+        restartAfterAbort = true;
+        setStatus('正在切换到「' + label + '」…', 'busy');
+        abortDownload();
+      } else if (dlState === 'aborted' || dlState === 'failed') {
+        retryDownload('已切换到「' + label + '」，重新下载…');
+      } else {
+        setStatus('线路已设为「' + label + '」，下次下载生效', 'ok');
+      }
+    };
+  }
+
+  function srcLabel(i) {
+    const s = MODEL_SOURCES[i];
+    return s ? s.tag + ' ' + s.name : '未知线路';
+  }
+
+  function setProgress(ratio) {
+    if (!UI.barFillEl) return;
+    UI.barFillEl.style.width = Math.max(0, Math.min(1, ratio || 0)) * 100 + '%';
+  }
+
+  // 下载状态机：idle / downloading / aborted / failed
+  // 按钮文案与进度条显隐都挂在这里，避免散落各处改不同步。
+  // 统一的重试入口：换线路 / 点「重试」都走这里。
+  // ★ 关键：上一轮可能还挂在「手动导入」对话框上（ocrLoading 未结算），
+  //   直接调 initOcr 只会拿到那个还挂着的 Promise，等于点了没反应。
+  //   所以先关对话框、等上一轮收尾，再重新开始。
+  function retryDownload(msg) {
+    const pending = ocrLoading;
+    if (modelDialogCancel) {
+      const cancel = modelDialogCancel;
+      modelDialogCancel = null;
+      try { cancel(); } catch (e) { /* 已经关了 */ }
+    }
+    setStatus(msg, 'busy');
+    Promise.resolve(pending).catch(() => {}).then(() => {
+      initOcr().then((sess) => {
+        if (sess) setStatus('模型已就绪，点「一键登录」继续', 'ok');
+      });
+    });
+  }
+
+  function setDlState(st) {
+    dlState = st;
+    if (UI.barEl) UI.barEl.classList.toggle('on', st === 'downloading');
+    if (st !== 'downloading') setProgress(0);
+    if (!UI.abortBtn) return;
+    if (st === 'downloading') { UI.abortBtn.disabled = false; UI.abortBtn.textContent = '中断'; }
+    else if (st === 'aborted' || st === 'failed') { UI.abortBtn.disabled = false; UI.abortBtn.textContent = '重试'; }
+    else { UI.abortBtn.disabled = true; UI.abortBtn.textContent = '中断'; }
   }
 
   // 在页面原生的「登录」按钮下方插一个绿色的「一键登录」，
@@ -394,9 +516,14 @@
     });
   }
 
+  // 手动导入对话框的「取消」句柄。换线路时要把这个对话框关掉，
+  // 否则它会盖在面板上，用户根本点不到线路下拉。
+  let modelDialogCancel = null;
+
   function askModelFile() {
     return new Promise((resolve) => {
       const box = document.createElement('div');
+      box.id = 'hbut-model-file';
       box.style.cssText = `position:fixed;inset:0;z-index:2147483646;display:flex;
         align-items:center;justify-content:center;background:rgba(15,23,42,.45);
         font:13px/1.7 -apple-system,'Microsoft YaHei',sans-serif;`;
@@ -432,6 +559,7 @@
           resolve(buf);
         } catch (e) { alert('读取失败：' + e.message); }
       };
+      modelDialogCancel = () => { try { box.remove(); } catch (e) {} resolve(null); };
     });
   }
 
@@ -439,20 +567,29 @@
   // OCR
   // =========================================================================
   let ocrSession = null;
+  let modelNote = '';   // 模型来源说明，拼进「正在加载识别引擎…」那一行
 
   // 从 CDN 下载模型二进制。GM_xmlhttpRequest 走扩展层，
   // 不受页面 CORS 限制，所以能直接取二进制。
+  //
+  // 句柄存到 activeReq，面板的「中断」按钮通过 abortDownload() 调 abort()。
+  // ★ 同时还要手动 reject：Tampermonkey 被 abort 后不一定触发 onabort，
+  //   不主动结算的话 await 会一直悬着，中断按钮就成了摆设。
   function downloadModel(url, onProgress, timeoutMs) {
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
+      const done = () => { activeReq = null; activeReject = null; };
+      activeReject = reject;
+
+      const req = GM_xmlhttpRequest({
         method: 'GET',
         url,
         responseType: 'arraybuffer',
         timeout: timeoutMs || 180000,
         onprogress: (e) => {
-          if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+          if (e.lengthComputable && e.total > 0) onProgress(e.loaded, e.total);
         },
         onload: (res) => {
+          done();
           if (res.status !== 200) return reject(new Error('HTTP ' + res.status));
           const buf = res.response;
           if (!buf || !buf.byteLength) return reject(new Error('响应为空'));
@@ -462,10 +599,26 @@
           }
           resolve(buf);
         },
-        onerror: () => reject(new Error('网络错误')),
-        ontimeout: () => reject(new Error('下载超时')),
+        onerror: () => { done(); reject(new Error('网络错误')); },
+        ontimeout: () => { done(); reject(new Error('下载超时')); },
+        onabort: () => { done(); reject(new Error('已中断')); },
       });
+
+      activeReq = req;
     });
+  }
+
+  function abortDownload() {
+    dlAborted = true;
+    const r = activeReq, rj = activeReject;
+    activeReq = null;
+    activeReject = null;
+    if (r && typeof r.abort === 'function') {
+      try { r.abort(); } catch (e) { /* 已经结束了 */ }
+    }
+    if (rj) {
+      try { rj(new Error('已中断')); } catch (e) { /* 已结算 */ }
+    }
   }
 
   // npm 包是个 gzip 压缩的 tar。浏览器有原生 DecompressionStream 能解 gzip，
@@ -498,9 +651,31 @@
     throw new Error('压缩包里没找到模型文件');
   }
 
-  async function initOcr() {
-    if (ocrSession) return ocrSession;
+  // 下载中的状态行：线路 · 百分比 · 已下载/总量 · 速度 · 已用时间
+  function dlStatusText(src, k, total, loaded, totalBytes, started) {
+    const secs = (Date.now() - started) / 1000;
+    const mb = (n) => (n / 1048576).toFixed(1);
+    const parts = [];
+    if (totalBytes) {
+      parts.push(Math.round((loaded / totalBytes) * 100) + '%');
+      parts.push(mb(loaded) + '/' + mb(totalBytes) + 'M');
+    }
+    if (secs > 0.3) parts.push(mb(loaded / secs) + 'M/s');
+    parts.push(secs.toFixed(1) + 's');
+    // 三行：第几条 → 哪条线路 → 进度。比挤成一行好读，也不会被随机断词。
+    return `正在下载模型（${k + 1}/${total}）` + '\n' + `${src.tag} ${src.name}` + '\n' + parts.join(' · ');
+  }
 
+  // 并发保护：换线路 / 手动重试可能和正在跑的那一轮撞上，
+  // 撞上就复用同一个 Promise，绝不并行下载两份。
+  function initOcr() {
+    if (ocrSession) return Promise.resolve(ocrSession);
+    if (ocrLoading) return ocrLoading;
+    ocrLoading = _initOcr().finally(() => { ocrLoading = null; });
+    return ocrLoading;
+  }
+
+  async function _initOcr() {
     if (typeof ort === 'undefined') {
       setStatus('onnxruntime 加载失败，检查能否访问 npmmirror', 'err');
       return null;
@@ -509,41 +684,103 @@
     let buf = await idbGet(DB_KEY);
     const fromCache = !!buf;
 
-    // 缓存里没有 -> 自动下载
     if (!buf) {
-      for (let i = 0; i < MODEL_SOURCES.length; i++) {
-        const src = MODEL_SOURCES[i];
-        try {
-          setStatus(`正在下载识别模型（${i + 1}/${MODEL_SOURCES.length}）…`, 'busy');
-          let raw = await downloadModel(src.url, (p) => {
-            setStatus(`正在下载识别模型 ${Math.round(p * 100)}%`, 'busy');
-          }, src.timeout);
-          if (src.tgz) {
-            setStatus('正在解压模型…', 'busy');
-            raw = await extractOnnxFromTgz(raw);
+      const picked = GM_getValue(K_SRC, '');
+
+      // ---- 手动导入：不碰网络 ----
+      if (picked === 'manual') {
+        setStatus('已选择「手动导入」，请选择模型文件', 'warn');
+        buf = await askModelFile();
+        if (!buf) {
+          setDlState('failed');
+          setStatus('没有模型，无法自动识别验证码', 'err');
+          return null;
+        }
+        try { await idbPut(DB_KEY, buf); } catch (e) { /* 存不进就只在内存里用 */ }
+      } else {
+        // ---- 自动 = 五条依次试；指定线路 = 只试那一条 ----
+        let idxs = picked === ''
+          ? MODEL_SOURCES.map((_, i) => i)
+          : [parseInt(picked, 10)].filter((n) => n >= 0 && n < MODEL_SOURCES.length);
+        // 存了个越界的值（换过版本 / 手改过存储）就退回自动，别让列表为空
+        if (!idxs.length) idxs = MODEL_SOURCES.map((_, i) => i);
+
+        dlAborted = false;
+        setDlState('downloading');
+
+        let lastErr = '';
+        for (let k = 0; k < idxs.length; k++) {
+          if (dlAborted) break;
+          const i = idxs[k];
+          const src = MODEL_SOURCES[i];
+          const started = Date.now();
+          let painted = 0;
+
+          try {
+            const raw = await downloadModel(src.url, (loaded, total) => {
+              const now = Date.now();
+              if (now - painted < 150) return;      // 限流，别把面板刷爆
+              painted = now;
+              setProgress(total ? loaded / total : 0);
+              setStatus(dlStatusText(src, k, idxs.length, loaded, total, started), 'busy');
+            }, src.timeout);
+
+            if (src.tgz) {
+              setStatus('正在解压模型…', 'busy');
+              buf = await extractOnnxFromTgz(raw);
+            } else {
+              buf = raw;
+            }
+            await idbPut(DB_KEY, buf);
+            setDlState('idle');
+            // ★ 不要在这里单独写一行「模型就绪」——紧接着就会 setStatus('正在加载识别引擎…')，
+            //   那一行活不过一帧，用户根本看不见。把来源并进下一步的状态里。
+            modelNote = `${(buf.byteLength / 1048576).toFixed(1)} MB，来自 ${src.tag} ${src.name}`;
+            break;
+          } catch (e) {
+            if (dlAborted) break;
+            lastErr = e.message;
+            console.warn('[湖工大自动登录] 下载失败', src.url, e.message);
+            if (k < idxs.length - 1) {
+              setStatus(`${src.tag} ${src.name} 失败（${e.message}），换下一条…`, 'warn');
+              await sleep(500);
+            }
           }
-          buf = raw;
-          await idbPut(DB_KEY, buf);
-          setStatus(`模型下载完成（${(buf.byteLength / 1024 / 1024).toFixed(1)}MB）`, 'ok');
-          break;
-        } catch (e) {
-          console.warn('[湖工大自动登录] 下载失败', src.url, e.message);
-          buf = null;
+        }
+
+        // ---- 用户中断 ----
+        if (dlAborted) {
+          if (restartAfterAbort) {
+            // 中断是为了换线路：直接按新选择重来。
+            // ★ 这里必须调 _initOcr 而不是 initOcr —— ocrLoading 此刻正指向
+            //   本轮的 Promise，调 initOcr 会拿到自己，await 自己 = 死锁。
+            restartAfterAbort = false;
+            return _initOcr();
+          }
+          setDlState('aborted');
+          setStatus('已中断下载。可换一条线路，或点「重试」', 'warn');
+          return null;
+        }
+
+        // ---- 全部失败 -> 手动导入兜底 ----
+        if (!buf) {
+          setDlState('failed');
+          const why = idxs.length === 1
+            ? '这条线路不可用（' + lastErr + '）。换一条线路，或改成「自动」'
+            : '所有线路都失败了（' + lastErr + '）。可在「线路」里换一条，或选「手动导入文件」';
+          setStatus('模型下载失败：' + why, 'err');
+          buf = await askModelFile();
+          if (!buf) { setStatus('没有模型，无法自动识别验证码', 'err'); return null; }
+          try { await idbPut(DB_KEY, buf); } catch (e) { /* 同上 */ }
         }
       }
-    }
-
-    // 下载也失败 -> 手动导入（原有逻辑）
-    if (!buf) {
-      setStatus('自动下载失败，请手动选择模型文件', 'warn');
-      buf = await askModelFile();
-      if (!buf) { setStatus('没有模型，无法自动识别验证码', 'err'); return null; }
     }
 
     ort.env.wasm.wasmPaths = ORT_BASE;
     ort.env.wasm.numThreads = 1;
 
-    setStatus('正在加载识别引擎…', 'busy');
+    if (!modelNote) modelNote = fromCache ? '本地缓存' : '';
+    setStatus('正在加载识别引擎…' + (modelNote ? `（模型 ${modelNote}）` : ''), 'busy');
     try {
       ocrSession = await ort.InferenceSession.create(buf, {
         executionProviders: ['wasm'],

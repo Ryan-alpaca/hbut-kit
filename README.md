@@ -14,7 +14,7 @@
 | 脚本 | 版本 | 适配域名 | 安装 |
 |---|---|---|---|
 | 湖工大选课助手 | v4.0.4 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
-| 统一认证 · 自动登录 | v3.2.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
+| 统一认证 · 自动登录 | v3.3.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
 
 > **国内打不开 `raw.githubusercontent.com`？** 用下面的 jsDelivr 镜像，效果一样。
 
