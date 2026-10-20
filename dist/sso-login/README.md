@@ -3,7 +3,7 @@
 打开 `auth.hbut.edu.cn` 登录页，脚本自动认出图形验证码并提交登录。
 **OCR 完全跑在浏览器里**，不需要任何后台程序、不需要服务器。
 
-> 当前版本：**v3.3.1** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
+> 当前版本：**v3.3.2** · 适用页面：`https://auth.hbut.edu.cn/authserver/login*`
 
 ---
 
