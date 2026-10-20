@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.5.0
+// @version      3.5.1
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -164,7 +164,7 @@
       } catch (e) {
         return resolve();
       }
-      setTimeout(resolve, 720);
+      setTimeout(resolve, 860);
     });
   }
 
@@ -243,41 +243,64 @@
     /* ---- 验证码落入动画（覆盖在页面输入框上方，纯装饰）---- */
     .cap-anim {
       position: fixed; pointer-events: none; z-index: 2147483645;
-      display: flex; align-items: center; justify-content: center; gap: 2px;
-      background: #fff; border: 1px solid #93c5fd; border-radius: 6px;
-      box-shadow: 0 0 0 3px rgba(37,99,235,.14); overflow: hidden;
-      font: 15px/1 ui-monospace, Consolas, monospace; color: #0f172a;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      background: #fff; border: 1px solid #93c5fd; border-radius: 7px;
+      overflow: hidden;
+      font: 16px/1 ui-monospace, Consolas, monospace; color: #0f172a;
+      animation: capIn .26s cubic-bezier(.2,.8,.3,1) both,
+                 capGlow 1.15s ease-out both;
     }
     .cap-anim span {
       width: 1ch; text-align: center;
-      opacity: 0; animation: capDrop .26s cubic-bezier(.2,.8,.3,1.2) forwards;
+      opacity: 0;
+      animation: capDrop .44s cubic-bezier(.16,1.05,.3,1) forwards;
     }
     .cap-anim .cap-bar {
       display: block; position: absolute; left: 0; bottom: 0; height: 3px; width: 0;
-      background: linear-gradient(90deg, #34d399, #16a34a);
-      animation: capFill .28s ease-out forwards;
+      background: linear-gradient(90deg, #6ee7b7 0%, #34d399 35%, #16a34a 65%, #34d399 100%);
+      background-size: 220% 100%;
+      animation: capFill .54s cubic-bezier(.4,0,.2,1) forwards,
+                 capFlow 1.6s linear infinite;
     }
     .cap-anim .ck {
-      position: absolute; right: 6px; top: 50%; width: 14px; height: 14px;
-      margin-top: -7px; opacity: 0; animation: capIn .16s ease-out forwards;
+      position: absolute; right: 8px; top: 50%; width: 15px; height: 15px;
+      margin-top: -7.5px; opacity: 0;
+      animation: capCheckIn .36s cubic-bezier(.2,1.3,.4,1) forwards;
     }
     .cap-anim .ck path {
       stroke: #16a34a; stroke-width: 2.4; fill: none;
       stroke-linecap: round; stroke-linejoin: round;
-      stroke-dasharray: 24; stroke-dashoffset: 24;
-      animation: capCheck .22s ease-out forwards;
+      stroke-dasharray: 26; stroke-dashoffset: 26;
+      animation: capCheck .36s cubic-bezier(.6,0,.4,1) forwards;
+    }
+    @keyframes capIn {
+      from { opacity: 0; transform: scale(.94); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes capGlow {
+      0%   { box-shadow: 0 0 0 3px rgba(37,99,235,.16); }
+      65%  { box-shadow: 0 0 0 4px rgba(34,197,94,.16); }
+      100% { box-shadow: 0 0 0 5px rgba(22,163,74,.10); }
     }
     @keyframes capDrop {
-      0%   { transform: translateY(-14px) scale(.75); opacity: 0; }
-      70%  { transform: translateY(1px) scale(1.04);  opacity: 1; }
-      100% { transform: translateY(0) scale(1);       opacity: 1; }
+      0%   { transform: translateY(-24px) scale(.55); opacity: 0; filter: blur(3px); }
+      55%  { transform: translateY(4px) scale(1.10); opacity: 1; filter: blur(0); }
+      78%  { transform: translateY(-1.5px) scale(.97); }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
     }
-    @keyframes capFill { to { width: 100%; } }
-    @keyframes capIn   { to { opacity: 1; } }
+    @keyframes capFill  { to { width: 100%; } }
+    @keyframes capFlow  { from { background-position: 0% 0; } to { background-position: 220% 0; } }
+    @keyframes capCheckIn {
+      0%   { opacity: 0; transform: scale(.4); }
+      60%  { opacity: 1; transform: scale(1.15); }
+      100% { opacity: 1; transform: scale(1); }
+    }
     @keyframes capCheck { to { stroke-dashoffset: 0; } }
 
     @media (prefers-reduced-motion: reduce) {
-      .cap-anim span, .cap-anim .cap-bar, .cap-anim .ck, .cap-anim .ck path { animation: none; opacity: 1; }
+      .cap-anim, .cap-anim span, .cap-anim .cap-bar,
+      .cap-anim .ck, .cap-anim .ck path { animation: none; opacity: 1; }
+      .cap-anim { box-shadow: 0 0 0 3px rgba(37,99,235,.14); }
       .cap-anim .cap-bar { width: 100%; }
       .cap-anim .ck path { stroke-dashoffset: 0; }
     }
@@ -288,14 +311,14 @@
       display: flex; align-items: center; justify-content: center;
       background: linear-gradient(160deg, #34d399 0%, #16a34a 100%);
       clip-path: circle(0% at 50% 50%);
-      animation: okSweep .40s cubic-bezier(.4,0,.2,1) forwards;
+      animation: okSweep .46s cubic-bezier(.4,0,.2,1) forwards;
     }
     .ok-ck { width: 160px; height: 160px; }
     .ok-ck path {
       fill: none; stroke: #fff; stroke-width: 9;
       stroke-linecap: round; stroke-linejoin: round;
       stroke-dasharray: 100; stroke-dashoffset: 100;
-      animation: okCheck .30s ease-out .28s forwards;
+      animation: okCheck .34s cubic-bezier(.6,0,.4,1) .34s forwards;
     }
     @keyframes okSweep { to { clip-path: circle(150% at 50% 50%); } }
     @keyframes okCheck { to { stroke-dashoffset: 0; } }
@@ -495,7 +518,11 @@
   // 纯装饰。任何异常、任何"输入框看不见"的情况都直接跳过并立刻返回，
   // 绝不能因为它拖住登录。动画结束时把真实值写进 input。
   // =========================================================================
-  const ANIM_TOTAL = 760;   // 与下面的 CSS delay 对齐：200 起填充，520 起打勾
+  // 节奏（与 CSS 里的 delay 一一对应）。放慢一倍，让每个字符都看得清。
+  const ANIM_STAGGER = 90;    // 字符之间的间隔
+  const ANIM_BAR_DELAY = 430; // 进度条开始填充
+  const ANIM_CHECK_DELAY = 900; // 对勾开始画
+  const ANIM_TOTAL = 1400;    // 整段结束（含 0.16s 余韵）
 
   function animOn() {
     try {
@@ -533,11 +560,11 @@
         layer.style.height = r.height + 'px';
 
         const chars = text.split('').map((ch, i) =>
-          '<span style="animation-delay:' + (i * 45) + 'ms">' + ch + '</span>').join('');
+          '<span style="animation-delay:' + (i * ANIM_STAGGER) + 'ms">' + ch + '</span>').join('');
 
         layer.innerHTML = chars +
-          '<i class="cap-bar" style="animation-delay:200ms"></i>' +
-          '<svg class="ck" viewBox="0 0 24 24" style="animation-delay:520ms">' +
+          '<i class="cap-bar" style="animation-delay:' + ANIM_BAR_DELAY + 'ms"></i>' +
+          '<svg class="ck" viewBox="0 0 24 24" style="animation-delay:' + ANIM_CHECK_DELAY + 'ms">' +
             '<path d="M4 12.5l5 5 11-11"/></svg>';
 
         UI.root.appendChild(layer);
