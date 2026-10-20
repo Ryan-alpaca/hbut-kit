@@ -23,6 +23,16 @@
 
 ### 第 2 步：装脚本
 
+**一键安装**：
+
+[![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js)
+
+点徽章会跳到 `raw.githubusercontent.com`，篡改猴自动接管并弹出安装页。
+国内打不开 raw 的话用 jsDelivr 镜像：
+[一键安装（镜像）](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/sso-login/hbut-auto-login.user.js)
+
+**手动安装**：
+
 篡改猴 → 管理面板 → 左上角 `+` → 把 `hbut-auto-login.user.js` 的全部内容贴进去 → `Ctrl+S`。
 
 或者直接把 `.user.js` 文件拖进浏览器窗口，篡改猴会接管安装。

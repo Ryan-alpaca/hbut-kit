@@ -6,21 +6,27 @@
 
 ---
 
-## 脚本
+## 一键安装
 
-| 脚本 | 版本 | 适配域名 |
-|---|---|---|
-| [湖工大选课助手](dist/course-helper/) | v4.0.4 | `jwxt.hbut.edu.cn` |
-| [湖工大统一认证 · 自动登录](dist/sso-login/) | v3.2.0 | `auth.hbut.edu.cn` |
+先装好 [Tampermonkey](https://www.tampermonkey.net/)，然后点下面的「install」——
+篡改猴会自动接管，弹出安装页。
 
----
+| 脚本 | 版本 | 适配域名 | 安装 |
+|---|---|---|---|
+| 湖工大选课助手 | v4.0.4 | `jwxt.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
+| 统一认证 · 自动登录 | v3.2.0 | `auth.hbut.edu.cn` | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/sso-login/hbut-auto-login.user.js) |
 
-## 安装
+> **国内打不开 `raw.githubusercontent.com`？** 用下面的 jsDelivr 镜像，效果一样。
 
-1. 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 打开 Tampermonkey → 添加新脚本
-3. 粘贴对应 `.user.js` 全文 → 保存
-4. 打开目标页面，右下角出现小圆钮即生效
+| 脚本 | 镜像安装 |
+|---|---|
+| 湖工大选课助手 | [jsDelivr](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
+| 统一认证 · 自动登录 | [jsDelivr](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/sso-login/hbut-auto-login.user.js) |
+
+### 手动安装（链接都失效时）
+
+1. 打开 Tampermonkey → 添加新脚本
+2. 粘贴对应 `.user.js` 全文 → 保存
 
 详细说明见各目录下的 `README.md`。
 
@@ -47,6 +53,7 @@
 - **不需要后台程序**：onnxruntime-web + 5 MB 裁剪模型，全跑在浏览器里
 - **两种密码模式**：浏览器密码管理器（默认，更安全）/ 脚本明文保存（全自动）
 - **失败分级处理**：验证码错就换图重试（不消耗失败次数），密码错立刻停手
+- **模型五路兜底**：npm 镜像 → jsDelivr 的 GitHub 通道 → GitHub raw → unpkg → jsDelivr
 
 ---
 
@@ -65,7 +72,9 @@
 │   │   └── 湖工大选课助手.user.js
 │   └── sso-login/
 │       ├── README.md
-│       └── hbut-auto-login.user.js
+│       ├── hbut-auto-login.user.js
+│       └── models/
+│           └── captcha_cropped.onnx      5 MB，自动下载的兜底
 │
 └── dev/                      ← 开发目录（不提交，见 .gitignore）
     ├── build/  tools/  tests/  debug/  docs/  data/     选课助手的开发文件

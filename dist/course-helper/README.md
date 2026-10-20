@@ -8,6 +8,17 @@
 
 ## 安装
 
+**一键安装**（先装好 [Tampermonkey](https://www.tampermonkey.net/)）：
+
+[![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js)
+
+点徽章会跳到 `raw.githubusercontent.com`，篡改猴自动接管并弹出安装页。
+
+国内打不开 raw 的话用 jsDelivr 镜像：
+[一键安装（镜像）](https://cdn.jsdelivr.net/gh/Ryan-alpaca/hbut-kit@main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js)
+
+**手动安装**：
+
 1. 装 [Tampermonkey](https://www.tampermonkey.net/)
 2. 新建脚本 → 粘贴 [`湖工大选课助手.user.js`](湖工大选课助手.user.js) 全文 → 保存
 3. 打开选课页，右下角出现小圆钮
