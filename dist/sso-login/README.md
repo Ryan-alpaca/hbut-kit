@@ -43,8 +43,9 @@
 | 4 | `unpkg.com` | npm 裸文件，13~36 s |
 | 5 | `cdn.jsdelivr.net/npm` | npm 裸文件，同上 |
 
-**为什么要有第 2、3 条**：前三条里有两条挂在 npm 上。万一 `captcha-ocr-model` 这个包被删、
-或者 npm 镜像抽风，只要 GitHub 仓库还在，脚本照样能拿到模型。
+**为什么要有第 2、3 条**：5 个源里 **3 个（①④⑤）都挂在 npm 上**，同一条船。万一
+`captcha-ocr-model` 这个包被删、或者 npm 镜像集体抽风，只要 GitHub 仓库还在，
+②③ 这两条就能拿到模型 —— 它们取的是本仓库里的文件，跟 npm 无关。
 
 tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionStream` 解开，不需要额外依赖。
 
