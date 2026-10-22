@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.5.1
+// @version      3.6.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
+// @match        http://epay.hbut.edu.cn/*
 // @updateURL    https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js
 // @require      https://registry.npmmirror.com/onnxruntime-web/1.20.0/files/dist/ort.min.js
@@ -101,6 +102,7 @@
   const K_SKIP = 'hbut_auto_skip';
   const K_SRC = 'hbut_src';         // 模型线路：'' 自动 | '0'..'4' 指定 | 'manual' 手动导入
   const K_ANIM = 'hbut_anim';       // 验证码动画：'1' 开（默认）| '0' 关
+  const K_EPAY = 'hbut_epay_state'; // epay 自动重试计数（sessionStorage）
 
   const F = '#pwdFromId';           // 页面有 4 个 form，id 重复，必须限定作用域
 
@@ -112,6 +114,11 @@
   // 必须通过 unsafeWindow 拿真正的页面 window。
   // =========================================================================
   const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+
+  // 两个站点的登录机制完全不同：
+  //   cas  —— auth.hbut.edu.cn，表单 #pwdFromId，走 CAS 票据
+  //   epay —— http://epay.hbut.edu.cn/，ASP.NET 表单，自带验证码（只开 80 端口）
+  const SITE = (W.location && W.location.hostname === 'epay.hbut.edu.cn') ? 'epay' : 'cas';
 
   // 页面自己的 AES 加密函数，可能挂在任一个 window 上，都找一遍
   function getEncryptFn() {
@@ -532,10 +539,10 @@
     } catch (e) { return true; }
   }
 
-  function animateCaptcha(text) {
+  function animateCaptcha(text, inputEl) {
     if (!animOn() || !UI.root || !text) return Promise.resolve();
 
-    const input = $(F + ' #captcha');
+    const input = inputEl || $(F + ' #captcha');
     if (!input) return Promise.resolve();
     const r = input.getBoundingClientRect();
     // 看不见就别演了（滚出视口 / 隐藏）
@@ -983,6 +990,10 @@
 
   function preprocess(imgEl) {
     const H = 64;
+    // 图没加载出来（naturalWidth=0）就别算宽高比了，否则会除零得到 Infinity
+    if (!imgEl.naturalWidth || !imgEl.naturalHeight) {
+      throw new Error('验证码图片没加载出来');
+    }
     const Wd = Math.max(1, Math.round(imgEl.naturalWidth * (H / imgEl.naturalHeight)));
     const c = document.createElement('canvas');
     c.width = Wd; c.height = H;
@@ -1107,6 +1118,151 @@
   }
 
   // =========================================================================
+  // epay 流程（http://epay.hbut.edu.cn/）
+  // ---------------------------------------------------------------------------
+  // 和 CAS 完全不同的机制，所以单开一条路：
+  //   - 独立 ASP.NET 表单，字段 #txt_yhm / #txt_pwd / #txt_yzm
+  //   - 验证码是 <img id="Image1" src="validate.aspx?...">，同源，可以直接 canvas 取像素
+  //   - 登录按钮 #ImageButton1 的 onclick 里做 RSA 加密（有 #pbk 才加密），
+  //     所以**点按钮**就行，不要自己拼请求
+  //   - 站点只开 80 端口，443 不通
+  //
+  // 验证码特点：4 位、全大写。实测现有模型字符全对、只是大小写不稳，
+  // 所以统一 toUpperCase()。
+  // =========================================================================
+  const E_USER = '#txt_yhm', E_PASS = '#txt_pwd', E_CODE = '#txt_yzm';
+  const E_IMG = '#Image1', E_BTN = '#ImageButton1';
+  const EPAY_MAX_TRIES = 2;       // 自动最多试几次，避免把账号试锁
+  const EPAY_STATE_TTL = 120000;  // 计数有效期，过了就重新算
+
+  function readEpayState() {
+    try {
+      const st = JSON.parse(W.sessionStorage.getItem(K_EPAY) || 'null');
+      if (st && typeof st.ts === 'number' && Date.now() - st.ts < EPAY_STATE_TTL) return st;
+    } catch (e) { /* 隐私模式等 */ }
+    return { tries: 0, ts: Date.now() };
+  }
+
+  function writeEpayState(tries) {
+    try { W.sessionStorage.setItem(K_EPAY, JSON.stringify({ tries: tries, ts: Date.now() })); }
+    catch (e) { /* 忽略 */ }
+  }
+
+  // 等浏览器把账号密码自动填进来（和 CAS 那边同一个思路）
+  async function waitEpayCreds(ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const u = $(E_USER), p = $(E_PASS);
+      if (u && p && u.value.trim() && p.value) return true;
+      await sleep(300);
+    }
+    return false;
+  }
+
+  async function recognizeEpayCaptcha(session) {
+    const img = $(E_IMG);
+    if (!img) return '';
+    if (!img.complete || !img.naturalWidth) {
+      await waitFor(() => img.complete && img.naturalWidth, 3000);
+    }
+    let text = '';
+    try { text = await recognize(session, img); } catch (e) { text = ''; }
+    return (text || '').toUpperCase();
+  }
+
+  // 换一张验证码（换图不消耗失败次数）
+  async function refreshEpayCaptcha() {
+    const img = $(E_IMG);
+    if (!img) return;
+    const p = new Promise((resolve) => {
+      const fin = () => resolve();
+      img.addEventListener('load', fin, { once: true });
+      img.addEventListener('error', fin, { once: true });
+      setTimeout(fin, 3000);
+    });
+    img.src = 'validate.aspx?' + Date.now() + Math.floor(Math.random() * 1000);
+    await p;
+    await sleep(120);
+  }
+
+  async function runEpayFlow(manual) {
+    await waitFor(() => document.body, 10000);
+
+    // ★ 脚本匹配 epay 的所有页面，但只有登录页该介入。
+    //   登录后进到缴费首页还弹面板、还白等 8 秒，会很烦。
+    //   所以先快速探一下有没有登录表单，没有就静默退出。
+    const isLoginPage = await waitFor(() => $(E_USER) && $(E_PASS), 3000);
+    if (!isLoginPage) return;
+
+    buildPanel();
+
+    const ready = await waitFor(
+      () => $(E_USER) && $(E_PASS) && $(E_CODE) && $(E_IMG), 8000);
+    if (!ready) {
+      setStatus('epay 登录表单不完整（缺验证码框或图片）', 'warn');
+      return;
+    }
+
+    const st = readEpayState();
+    if (!manual && st.tries >= EPAY_MAX_TRIES) {
+      setStatus('自动试了 ' + st.tries + ' 次都没成功，请手动登录（可能是账号或密码不对）', 'err');
+      return;
+    }
+
+    // ---- 账号密码 ----
+    const mode = GM_getValue(K_MODE, 'edge');
+    if (mode === 'stored') {
+      const user = GM_getValue(K_USER, '');
+      const pass = GM_getValue(K_PASS, '');
+      if (!user || !pass) {
+        setAccount('未设置');
+        setStatus('还没保存账号密码，请点「设置」填写', 'warn');
+        openSettings();
+        return;
+      }
+      setAccount(user + '（脚本保存）');
+      $(E_USER).value = user;
+      $(E_PASS).value = pass;
+    } else {
+      setAccount('浏览器密码管理器');
+      setStatus('请点账号框，选择浏览器保存的账号密码', 'warn');
+      const ok = await waitEpayCreds(20000);
+      if (!ok) {
+        setStatus('没等到账号密码。可以点「设置」改用脚本保存，或手动登录', 'warn');
+        return;
+      }
+      setAccount(($(E_USER).value || '已填充'));
+    }
+
+    // ---- 验证码 ----
+    setStatus('正在准备识别引擎…', 'busy');
+    const session = await initOcr();
+    if (!session) return;
+
+    let text = await recognizeEpayCaptcha(session);
+    if (text.length !== 4) {
+      setStatus('第一张没认准（' + (text || '空') + '），换一张…', 'warn');
+      await refreshEpayCaptcha();
+      text = await recognizeEpayCaptcha(session);
+    }
+    if (text.length !== 4) {
+      setStatus('验证码没认出来（' + (text || '空') + '），请手动输入后点登录', 'err');
+      try { $(E_CODE).focus(); } catch (e) {}
+      return;
+    }
+
+    // ---- 填 → 动画 → 提交 ----
+    setStatus('识别到验证码 ' + text + '，正在提交…', 'busy');
+    await animateCaptcha(text, $(E_CODE));
+    await playSuccessOverlay();
+    try { $(E_CODE).value = text; } catch (e) {}
+    writeEpayState(st.tries + 1);
+    const btn = $(E_BTN);
+    if (btn) btn.click();
+    else setStatus('找不到登录按钮', 'err');
+  }
+
+  // =========================================================================
   // 主流程
   // =========================================================================
   let running = false;
@@ -1119,6 +1275,19 @@
       return;
     }
     running = true;
+
+    // epay 是完全独立的机制，走另一条路
+    if (SITE === 'epay') {
+      try {
+        await runEpayFlow(manual);
+      } catch (e) {
+        console.error('[湖工大自动登录] epay 流程出错', e);
+        setStatus('epay 流程出错：' + (e && e.message ? e.message : e), 'err');
+      } finally {
+        running = false;
+      }
+      return;
+    }
 
     try {
       await waitFor(() => document.body, 10000);
@@ -1271,6 +1440,10 @@
       const off = GM_getValue(K_ANIM, '1') === '0';
       GM_setValue(K_ANIM, off ? '1' : '0');
       setStatus(off ? '验证码动画已开启' : '验证码动画已关闭', 'ok');
+    });
+    GM_registerMenuCommand('⚡ 立即登录（epay）', () => {
+      if (SITE !== 'epay') { setStatus('当前不在 epay 页面', 'warn'); return; }
+      runFlow({ manual: true });
     });
     GM_registerMenuCommand('⏭️ 本次跳过自动登录', skipOnce);
   } catch (e) { /* 非篡改猴环境 */ }
