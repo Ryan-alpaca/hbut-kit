@@ -103,6 +103,15 @@
 
 ---
 
+## 制作
+
+本项目由 **WorkBuddy**（AI 编程助手）与 **Deepseek-V4.1-Flash**（其底层模型）协作完成。
+
+需求、决策与验收由 [Ryan-alpaca](https://github.com/Ryan-alpaca) 负责；
+代码实现、调试与文档由上述组合完成。
+
+---
+
 ## 许可
 
 本仓库以 **MIT** 许可发布，见 [`LICENSE`](LICENSE)。

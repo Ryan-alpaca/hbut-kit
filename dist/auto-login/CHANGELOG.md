@@ -173,7 +173,7 @@
 
 - **模型自动下载**：不再需要手动导入。首次在空 IndexedDB 环境下自动从 CDN 拉 5MB 模型，
   存进 IndexedDB，之后秒开。
-- 发布 npm 包 `captcha-ocr-model@1.0.0`（gzip tarball 3.59MB），
+- 发布 npm 包 `captcha-ocr-model v1.0.0`（gzip tarball 3.59MB），
   浏览器用 `DecompressionStream('gzip')` + 手写 tar 解析提取模型。
 
 ### ★ 关键发现：npm 镜像的两套路径规则
