@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.6.0
+// @version      3.7.0
 // @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
@@ -103,6 +103,7 @@
   const K_SRC = 'hbut_src';         // 模型线路：'' 自动 | '0'..'4' 指定 | 'manual' 手动导入
   const K_ANIM = 'hbut_anim';       // 验证码动画：'1' 开（默认）| '0' 关
   const K_EPAY = 'hbut_epay_state'; // epay 自动重试计数（sessionStorage）
+  const K_MODEL_B64 = 'hbut_model_b64'; // 模型字节的 base64 镜像，跨站点共享
 
   const F = '#pwdFromId';           // 页面有 4 个 form，id 重复，必须限定作用域
 
@@ -362,6 +363,7 @@
         <div class="row">线路：<select id="src" title="模型下载线路"></select></div>
         <div class="acts">
           <button id="btn-set">设置</button>
+          <button id="btn-login" style="display:none">登录</button>
           <button id="btn-abort" disabled>中断</button>
           <button id="btn-skip">跳过</button>
         </div>
@@ -385,6 +387,17 @@
       UI.root.getElementById('toggle').textContent = UI.collapsed ? '+' : '—';
     };
     UI.root.getElementById('btn-set').onclick = (e) => { e.stopPropagation(); openSettings(); };
+
+    // epay 页面上没有 #login_submit 可以挂绿色按钮，所以把手动入口放面板里
+    const loginBtn = UI.root.getElementById('btn-login');
+    if (SITE === 'epay' && loginBtn) {
+      loginBtn.style.display = '';
+      loginBtn.onclick = (e) => {
+        e.stopPropagation();
+        // 手动触发不受重试计数限制
+        runFlow({ manual: true });
+      };
+    }
     UI.root.getElementById('btn-skip').onclick = (e) => { e.stopPropagation(); skipOnce(); };
     UI.abortBtn.onclick = (e) => {
       e.stopPropagation();
@@ -757,6 +770,26 @@
   // OCR
   // =========================================================================
   let ocrSession = null;
+
+  // IndexedDB 是按 origin 隔离的：auth.hbut.edu.cn 和 epay.hbut.edu.cn 各存一份，
+  // 所以在第二个站点上会重新下 5MB。篡改猴存储是全局的，拿它做一层镜像，
+  // 第一次下完就写进去，之后哪个站点都能直接用。
+  function bufToB64(buf) {
+    const u8 = new Uint8Array(buf);
+    const CH = 0x8000;                    // 分块，别让 apply 的参数个数爆掉
+    let s = '';
+    for (let i = 0; i < u8.length; i += CH) {
+      s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+    }
+    return btoa(s);
+  }
+
+  function b64ToBuf(b64) {
+    const bin = atob(b64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return u8.buffer;
+  }
   let modelNote = '';   // 模型来源说明，拼进「正在加载识别引擎…」那一行
 
   // 从 CDN 下载模型二进制。GM_xmlhttpRequest 走扩展层，
@@ -872,6 +905,19 @@
     }
 
     let buf = await idbGet(DB_KEY);
+
+    // 本 origin 的 IndexedDB 没有 → 先看共享镜像（别的站点下过的）
+    if (!buf) {
+      try {
+        const b64 = GM_getValue(K_MODEL_B64, '');
+        if (b64 && b64.length > 1000000) {       // 太短说明是坏数据
+          setStatus('正在从本地共享缓存读取模型…', 'busy');
+          buf = b64ToBuf(b64);
+          try { await idbPut(DB_KEY, buf); } catch (e) { /* 存不进就只用内存 */ }
+        }
+      } catch (e) { /* 存储不可用，走下载 */ }
+    }
+
     const fromCache = !!buf;
 
     if (!buf) {
@@ -922,6 +968,8 @@
               buf = raw;
             }
             await idbPut(DB_KEY, buf);
+            // 镜像到篡改猴存储，别的站点就不用再下这 5MB 了
+            try { GM_setValue(K_MODEL_B64, bufToB64(buf)); } catch (e) { /* 配额满了就算了 */ }
             setDlState('idle');
             // ★ 不要在这里单独写一行「模型就绪」——紧接着就会 setStatus('正在加载识别引擎…')，
             //   那一行活不过一帧，用户根本看不见。把来源并进下一步的状态里。
@@ -1433,8 +1481,9 @@
     GM_registerMenuCommand('⚙️ 打开设置面板', openSettings);
     GM_registerMenuCommand('🔄 重新导入识别模型', async () => {
       try { await idbPut(DB_KEY, null); } catch (e) {}
+      try { GM_setValue(K_MODEL_B64, ''); } catch (e) {}
       ocrSession = null;
-      setStatus('模型已清除，刷新页面后重新导入', 'ok');
+      setStatus('模型已清除（含共享缓存），刷新页面后重新下载', 'ok');
     });
     GM_registerMenuCommand('🎬 开 / 关验证码动画', () => {
       const off = GM_getValue(K_ANIM, '1') === '0';
