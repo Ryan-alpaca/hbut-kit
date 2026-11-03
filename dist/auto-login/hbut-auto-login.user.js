@@ -105,7 +105,9 @@
   const K_ANIM = 'hbut_anim';       // 验证码动画：'1' 开（默认）| '0' 关
   const K_EPAY = 'hbut_epay_state'; // epay 自动重试计数（sessionStorage）
   const K_MODEL_B64 = 'hbut_model_b64'; // 模型字节的 base64 镜像，跨站点共享
-  const K_CARSI = 'hbut_carsi';         // CARSI 自动选校：'1' 开（默认）| '0' 关
+  // CARSI 选校模式：'auto' 自动选中（默认）| 'button' 只加一个按钮 | 'off' 完全不介入
+  // 兼容旧值：'1' 等同 auto，'0' 等同 off
+  const K_CARSI = 'hbut_carsi';
 
   // CARSI 联邦里湖北工业大学的 IdP 标识（CARSI 会员列表里的 entityID）
   const CARSI_ENTITY = 'https://idp.hbut.edu.cn/idp/shibboleth';
@@ -1145,22 +1147,90 @@
     } catch (e) { return false; }
   }
 
+  // 'auto' | 'button' | 'off'。旧值 '1' / '0' 也认。
+  function carsiMode() {
+    let v = 'auto';
+    try { v = GM_getValue(K_CARSI, 'auto'); } catch (e) {}
+    if (v === '0' || v === 'off') return 'off';
+    if (v === 'button') return 'button';
+    return 'auto';
+  }
+
+  function carsiLabel(mode) {
+    return mode === 'off' ? '关闭' : mode === 'button' ? '只显示按钮' : '自动选中';
+  }
+
+  // 选中本校 IdP。user_select 会提交表单跳转，正常情况下这个函数不会返回。
+  function carsiSelect() {
+    try {
+      if (typeof W.user_select === 'function') {
+        // 第二个参数是「记住选择」，传 false：不往 carsi.edu.cn 写持久 cookie
+        W.user_select(CARSI_ENTITY, false);
+        return true;
+      }
+    } catch (e) { /* 落到兜底 */ }
+    return carsiFallback();
+  }
+
+  // 只在页面右下角放一个按钮，点一下才选。用页面 DOM + 内联样式，
+  // 因为选校页没有控制面板（没有登录表单，面板没意义）。
+  function mountCarsiButton() {
+    if (document.getElementById('hbut-carsi-btn')) return;
+    if (!document.body) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'hbut-carsi-btn';
+    btn.type = 'button';
+    btn.textContent = '选湖工大';
+    btn.title = '选中湖北工业大学并继续登录';
+    btn.style.cssText = [
+      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:2147483647',
+      'padding:11px 20px', 'border:0', 'border-radius:999px',
+      'background:#16a34a', 'color:#fff', 'font-size:14px', 'font-weight:600',
+      'font-family:-apple-system,"Microsoft YaHei",sans-serif',
+      'box-shadow:0 6px 20px rgba(22,163,74,.35)', 'cursor:pointer',
+      'line-height:1.2', 'min-height:44px',
+    ].join(';');
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = '正在跳转…';
+      btn.style.opacity = '.75';
+      carsiSelect();
+      // 状态异常时页面不提交，等 2.5 秒兜底
+      setTimeout(() => {
+        try {
+          if (W.location.hostname !== 'ds.carsi.edu.cn') return;
+          if (!carsiFallback()) { btn.disabled = false; btn.textContent = '选湖工大'; btn.style.opacity = ''; }
+        } catch (err) {}
+      }, 2500);
+    });
+
+    document.body.appendChild(btn);
+  }
+
   async function runCarsi() {
-    if (GM_getValue(K_CARSI, '1') === '0') return;
+    const mode = carsiMode();
+    if (mode === 'off') return;
 
     // 只有从资源站跳过来（URL 带 entityID / return）才介入。
     // 直接打开 ds.carsi.edu.cn 首页时不动作，免得用户想看别的学校也被跳走。
     const q = (W.location && W.location.search) || '';
     if (!/[?&](entityID|return)=/.test(q)) return;
 
+    if (mode === 'button') {
+      await waitFor(() => document.body, 8000);
+      mountCarsiButton();
+      return;
+    }
+
     // user_select 来自页面的 carsilogin-check.js，可能比脚本晚一点就绪
     const ready = await waitFor(() => typeof W.user_select === 'function', 8000);
     if (!ready) { carsiFallback(); return; }
 
-    try {
-      // 第二个参数是「记住选择」，传 false：不往 carsi.edu.cn 写持久 cookie
-      W.user_select(CARSI_ENTITY, false);
-    } catch (e) { carsiFallback(); return; }
+    carsiSelect();
 
     // user_select 在 IdP 状态异常时会弹窗并直接 return（不提交表单）。
     // 等 2.5 秒还在这个页面，就绕过状态检查直接提交 —— 那是「提示风险但允许继续」的语义。
@@ -1602,14 +1672,14 @@
       if (SITE !== 'epay') { setStatus('当前不在 epay 页面', 'warn'); return; }
       runFlow({ manual: true });
     });
-    GM_registerMenuCommand('🏫 开 / 关 CARSI 自动选校', () => {
-      const off = GM_getValue(K_CARSI, '1') === '0';
-      GM_setValue(K_CARSI, off ? '1' : '0');
+    GM_registerMenuCommand('🏫 CARSI 选校：' + carsiLabel(carsiMode()) + '（点击切换）', () => {
+      const next = { auto: 'button', button: 'off', off: 'auto' }[carsiMode()];
+      GM_setValue(K_CARSI, next);
       if (SITE === 'carsi') {
         // 选校页没有面板，直接刷新让开关生效
         try { W.location.reload(); } catch (e) {}
       } else {
-        setStatus(off ? 'CARSI 自动选校已开启' : 'CARSI 自动选校已关闭', 'ok');
+        setStatus('CARSI 选校模式：' + carsiLabel(next), 'ok');
       }
     });
     GM_registerMenuCommand('⏭️ 本次跳过自动登录', skipOnce);
