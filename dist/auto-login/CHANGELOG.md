@@ -17,6 +17,40 @@
 
 ---
 
+## [3.9.0] - 2026-11-03
+
+### 新增
+
+- **CARSI 联邦认证自动选校**。从知网、万方、Web of Science 这类接了 CARSI 的资源站
+  点「机构登录」后，会先跳到 `ds.carsi.edu.cn` 让你在几百所学校里选一个，选完才到本校 IdP。
+  现在脚本在这一步**自动选中湖北工业大学并提交**，后面接的正好是它本来就在处理的
+  `auth.hbut.edu.cn` 登录页 —— 整条链路变成「点一下机构登录 → 自动登录完成」。
+- 新增 `@match https://ds.carsi.edu.cn/login/index*`。
+- 菜单新增「🏫 开 / 关 CARSI 自动选校」，默认开启。
+
+### 实现
+
+选校页把 IdP 列表放在全局 `IdPList` 里，选中靠全局函数 `user_select(entityID)`：
+它把 entityID 写进 `#hid-inp`，再提交 `#idpForm` 跳到 IdP。所以脚本只需要替用户
+「点」一下：
+
+```js
+user_select('https://idp.hbut.edu.cn/idp/shibboleth', false);
+```
+
+`https://idp.hbut.edu.cn/idp/shibboleth` 是湖北工业大学在 CARSI 会员列表里的 entityID。
+
+### 行为边界
+
+- **只在从资源站跳过来时介入**（URL 带 `entityID` / `return`）。直接打开
+  `ds.carsi.edu.cn` 首页不动作 —— 免得用户想看别的学校也被跳走。
+- **不替用户勾「记住选择」**：第二个参数传 `false`，不往 `.carsi.edu.cn` 写持久 cookie。
+- IdP 状态异常时，页面原本会弹提示并**不提交**。脚本等 2.5 秒发现还停在选校页，
+  就兜底直接提交 —— 等同于用户看完提示点「继续」。
+- 选校页不建控制面板（那一页没有登录表单，面板没有意义）。
+
+---
+
 ## [3.8.0] - 2026-11-03
 
 ### 新增

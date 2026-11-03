@@ -13,7 +13,7 @@
 
 | 脚本 | 版本 | 适配域名 | 更新日志 | 安装 |
 |---|---|---|---|---|
-| [统一认证 · 自动登录](dist/auto-login/README.md) | v3.8.0 | `auth.hbut.edu.cn`<br>`epay.hbut.edu.cn` | [CHANGELOG](dist/auto-login/CHANGELOG.md) | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js) |
+| [统一认证 · 自动登录](dist/auto-login/README.md) | v3.9.0 | `auth.hbut.edu.cn`<br>`epay.hbut.edu.cn` | [CHANGELOG](dist/auto-login/CHANGELOG.md) | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js) |
 | [湖工大选课助手](dist/course-helper/README.md) | v4.1.0 | `jwxt.hbut.edu.cn` | [CHANGELOG](dist/course-helper/CHANGELOG.md) | [![install](https://img.shields.io/badge/install-userscript-2ea44f)](https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/course-helper/%E6%B9%96%E5%B7%A5%E5%A4%A7%E9%80%89%E8%AF%BE%E5%8A%A9%E6%89%8B.user.js) |
 
 > **国内打不开 `raw.githubusercontent.com`？** 用下面的 jsDelivr 镜像，效果一样。
@@ -42,7 +42,7 @@
 
 | 脚本 | 当前版本 | 变更记录 |
 |---|---|---|
-| [统一认证 · 自动登录](dist/auto-login/README.md) | v3.8.0 | [`dist/auto-login/CHANGELOG.md`](dist/auto-login/CHANGELOG.md) |
+| [统一认证 · 自动登录](dist/auto-login/README.md) | v3.9.0 | [`dist/auto-login/CHANGELOG.md`](dist/auto-login/CHANGELOG.md) |
 | [湖工大选课助手](dist/course-helper/README.md) | v4.1.0 | [`dist/course-helper/CHANGELOG.md`](dist/course-helper/CHANGELOG.md) |
 
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，

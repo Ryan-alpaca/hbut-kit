@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.8.0
-// @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板，支持手机端（浏览器自动填充）
+// @version      3.9.0
+// @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板，支持手机端与 CARSI 自动选校
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
 // @match        http://epay.hbut.edu.cn/*
+// @match        https://ds.carsi.edu.cn/login/index*
 // @updateURL    https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ryan-alpaca/hbut-kit/main/dist/auto-login/hbut-auto-login.user.js
 // @require      https://registry.npmmirror.com/onnxruntime-web/1.20.0/files/dist/ort.min.js
@@ -104,6 +105,10 @@
   const K_ANIM = 'hbut_anim';       // 验证码动画：'1' 开（默认）| '0' 关
   const K_EPAY = 'hbut_epay_state'; // epay 自动重试计数（sessionStorage）
   const K_MODEL_B64 = 'hbut_model_b64'; // 模型字节的 base64 镜像，跨站点共享
+  const K_CARSI = 'hbut_carsi';         // CARSI 自动选校：'1' 开（默认）| '0' 关
+
+  // CARSI 联邦里湖北工业大学的 IdP 标识（CARSI 会员列表里的 entityID）
+  const CARSI_ENTITY = 'https://idp.hbut.edu.cn/idp/shibboleth';
 
   // 页面有多个 form（账号密码登录 / 短信验证码登录 / FIDO 等），且 form 的 id 会被页面
   // JS 动态改写：电脑端最终是 #pwdFromId，手机端（移动版 login.js）用 #loginFromId，
@@ -141,10 +146,14 @@
     (W.navigator && W.navigator.userAgent) || navigator.userAgent || ''
   );
 
-  // 两个站点的登录机制完全不同：
-  //   cas  —— auth.hbut.edu.cn，表单 #pwdFromId，走 CAS 票据
-  //   epay —— http://epay.hbut.edu.cn/，ASP.NET 表单，自带验证码（只开 80 端口）
-  const SITE = (W.location && W.location.hostname === 'epay.hbut.edu.cn') ? 'epay' : 'cas';
+  // 三个站点的机制完全不同：
+  //   cas   —— auth.hbut.edu.cn，表单 #pwdFromId，走 CAS 票据
+  //   epay  —— http://epay.hbut.edu.cn/，ASP.NET 表单，自带验证码（只开 80 端口）
+  //   carsi —— ds.carsi.edu.cn，联邦选校页，只负责把用户送到本校 IdP
+  const HOST = (W.location && W.location.hostname) || '';
+  const SITE = HOST === 'epay.hbut.edu.cn' ? 'epay'
+             : HOST === 'ds.carsi.edu.cn' ? 'carsi'
+             : 'cas';
 
   // 页面自己的 AES 加密函数，可能挂在任一个 window 上，都找一遍
   function getEncryptFn() {
@@ -1117,6 +1126,53 @@
   }
 
   // =========================================================================
+  // CARSI 联邦认证：自动选中湖北工业大学
+  // ---------------------------------------------------------------------------
+  // 完整链路：
+  //   资源站 → ds.carsi.edu.cn（选学校）→ idp.hbut.edu.cn → auth.hbut.edu.cn
+  // 选校页把 IdP 列表放在全局 IdPList 里，选中靠全局函数 user_select(entityID)：
+  // 它把 entityID 写进 #hid-inp，然后提交 #idpForm → 跳到本校 IdP。
+  // 所以这里只需要在页面加载后替用户「点」一下，后面的 CAS 登录脚本自己会接上。
+  // =========================================================================
+  function carsiFallback() {
+    try {
+      const form = document.getElementById('idpForm');
+      const inp = document.getElementById('hid-inp');
+      if (!form || !inp) return false;
+      inp.value = CARSI_ENTITY;
+      form.submit();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function runCarsi() {
+    if (GM_getValue(K_CARSI, '1') === '0') return;
+
+    // 只有从资源站跳过来（URL 带 entityID / return）才介入。
+    // 直接打开 ds.carsi.edu.cn 首页时不动作，免得用户想看别的学校也被跳走。
+    const q = (W.location && W.location.search) || '';
+    if (!/[?&](entityID|return)=/.test(q)) return;
+
+    // user_select 来自页面的 carsilogin-check.js，可能比脚本晚一点就绪
+    const ready = await waitFor(() => typeof W.user_select === 'function', 8000);
+    if (!ready) { carsiFallback(); return; }
+
+    try {
+      // 第二个参数是「记住选择」，传 false：不往 carsi.edu.cn 写持久 cookie
+      W.user_select(CARSI_ENTITY, false);
+    } catch (e) { carsiFallback(); return; }
+
+    // user_select 在 IdP 状态异常时会弹窗并直接 return（不提交表单）。
+    // 等 2.5 秒还在这个页面，就绕过状态检查直接提交 —— 那是「提示风险但允许继续」的语义。
+    setTimeout(() => {
+      try {
+        if (W.location.hostname !== 'ds.carsi.edu.cn') return;
+        if (document.getElementById('hid-inp')) carsiFallback();
+      } catch (e) {}
+    }, 2500);
+  }
+
+  // =========================================================================
   // 页面交互
   // =========================================================================
   const captchaImg = () => qf('#captchaImg') || document.querySelector('#captchaImg');
@@ -1546,13 +1602,26 @@
       if (SITE !== 'epay') { setStatus('当前不在 epay 页面', 'warn'); return; }
       runFlow({ manual: true });
     });
+    GM_registerMenuCommand('🏫 开 / 关 CARSI 自动选校', () => {
+      const off = GM_getValue(K_CARSI, '1') === '0';
+      GM_setValue(K_CARSI, off ? '1' : '0');
+      if (SITE === 'carsi') {
+        // 选校页没有面板，直接刷新让开关生效
+        try { W.location.reload(); } catch (e) {}
+      } else {
+        setStatus(off ? 'CARSI 自动选校已开启' : 'CARSI 自动选校已关闭', 'ok');
+      }
+    });
     GM_registerMenuCommand('⏭️ 本次跳过自动登录', skipOnce);
   } catch (e) { /* 非篡改猴环境 */ }
 
   // =========================================================================
   // 启动
   // =========================================================================
-  if (W.sessionStorage && W.sessionStorage.getItem(K_SKIP) === '1') {
+  if (SITE === 'carsi') {
+    // 选校页：只做「选中湖北工业大学」这一件事，不建面板
+    runCarsi().catch((e) => console.error('[湖工大自动登录] CARSI 选校出错', e));
+  } else if (W.sessionStorage && W.sessionStorage.getItem(K_SKIP) === '1') {
     W.sessionStorage.removeItem(K_SKIP);
     waitFor(() => document.body, 5000).then(() => {
       buildPanel();
