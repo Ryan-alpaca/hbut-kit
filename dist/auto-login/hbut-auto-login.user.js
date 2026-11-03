@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         湖工大统一认证 · 自动登录
 // @namespace    local.hbut.autologin
-// @version      3.7.0
-// @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板
+// @version      3.8.0
+// @description  自动识别图形验证码完成登录，OCR 跑在浏览器里，带常驻控制面板，支持手机端（浏览器自动填充）
 // @author       Ryan-alpaca
 // @match        https://auth.hbut.edu.cn/authserver/login*
 // @match        http://epay.hbut.edu.cn/*
@@ -105,7 +105,27 @@
   const K_EPAY = 'hbut_epay_state'; // epay 自动重试计数（sessionStorage）
   const K_MODEL_B64 = 'hbut_model_b64'; // 模型字节的 base64 镜像，跨站点共享
 
-  const F = '#pwdFromId';           // 页面有 4 个 form，id 重复，必须限定作用域
+  // 页面有多个 form（账号密码登录 / 短信验证码登录 / FIDO 等），且 form 的 id 会被页面
+  // JS 动态改写：电脑端最终是 #pwdFromId，手机端（移动版 login.js）用 #loginFromId，
+  // 而且静态 HTML 里 #loginFromId 还是重复的（两个）。靠 id 选 form 很容易抓错。
+  //
+  // 最可靠的判据：只有「账号密码登录」那个 form 里有 type=password 的输入框。
+  // 所以直接定位「包含密码框的 form 元素」，不依赖 id，也避开重复 id 的坑。
+  // 注意不要缓存结果：页面 form 可能是 JS 稍后才生成/替换的，缓存会导致永久抓空。
+  function resolveForm() {
+    const byId = document.querySelector('#pwdFromId');
+    if (byId) return byId;
+    const pw = document.querySelector('input[type="password"]');
+    if (pw && pw.closest('form')) return pw.closest('form');
+    return document.querySelector('#loginFromId') || null;
+  }
+
+  // 在定位到的登录 form 内查元素；sel 为空时返回 form 本身
+  function qf(sel) {
+    const root = resolveForm();
+    if (!root) return null;
+    return sel ? root.querySelector(sel) : root;
+  }
 
   // =========================================================================
   // 沙箱兼容
@@ -115,6 +135,11 @@
   // 必须通过 unsafeWindow 拿真正的页面 window。
   // =========================================================================
   const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+
+  // 是否手机/平板：用真实页面 UA 判断（沙箱里的 navigator 不一定准）
+  const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile|Windows Phone|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    (W.navigator && W.navigator.userAgent) || navigator.userAgent || ''
+  );
 
   // 两个站点的登录机制完全不同：
   //   cas  —— auth.hbut.edu.cn，表单 #pwdFromId，走 CAS 票据
@@ -199,8 +224,8 @@
     :host { all: initial; }
     * { box-sizing: border-box; }
     .wrap {
-      position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
-      width: 288px; font: 13px/1.6 -apple-system, "Microsoft YaHei", sans-serif;
+      position: fixed; right: 12px; bottom: 12px; z-index: 2147483645;
+      width: min(288px, calc(100vw - 24px)); font: 13px/1.6 -apple-system, "Microsoft YaHei", sans-serif;
       color: #1e293b; background: #fff; border-radius: 10px;
       box-shadow: 0 8px 28px rgba(15,23,42,.18); border: 1px solid #e2e8f0;
       overflow: hidden;
@@ -237,8 +262,8 @@
       transition: width .15s linear; }
     .acts { display: flex; gap: 6px; margin-top: 10px; }
     button {
-      flex: 1; padding: 6px 4px; border-radius: 6px; border: 1px solid #cbd5e1;
-      background: #fff; color: #334155; font-size: 12px; cursor: pointer;
+      flex: 1; padding: 8px 4px; min-height: 38px; border-radius: 6px; border: 1px solid #cbd5e1;
+      background: #fff; color: #334155; font-size: 13px; cursor: pointer;
       font-family: inherit; transition: background .15s;
     }
     button:hover:not(:disabled) { background: #f1f5f9; }
@@ -343,7 +368,7 @@
     UI.host.id = 'hbut-panel-host';
     // 做成 0 尺寸的 fixed 容器：不占页面布局，里面的 .wrap 自己 fixed 定位
     UI.host.style.cssText =
-      'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;';
+      'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483640;';
     UI.root = UI.host.attachShadow({ mode: 'open' });
 
     const style = document.createElement('style');
@@ -373,6 +398,14 @@
     UI.root.appendChild(style);
     UI.root.appendChild(wrap);
     document.body.appendChild(UI.host);
+
+    // 手机端屏幕小，默认收起面板，少挡登录表单
+    if (IS_MOBILE) {
+      UI.collapsed = true;
+      wrap.classList.add('collapsed');
+      const tg = UI.root.getElementById('toggle');
+      if (tg) tg.textContent = '+';
+    }
 
     UI.statusEl = UI.root.getElementById('status');
     UI.accountEl = UI.root.getElementById('account');
@@ -487,7 +520,7 @@
   // 在页面原生的「登录」按钮下方插一个绿色的「一键登录」，
   // 复用原生按钮的 class 保持尺寸一致，只把背景色覆盖成绿色。
   function injectQuickButton() {
-    const nativeBtn = $(F + ' #login_submit');
+    const nativeBtn = qf('#login_submit');
     if (!nativeBtn || !nativeBtn.parentNode) return;
     if (document.getElementById('hbut-quick-login')) return;
 
@@ -555,7 +588,7 @@
   function animateCaptcha(text, inputEl) {
     if (!animOn() || !UI.root || !text) return Promise.resolve();
 
-    const input = inputEl || $(F + ' #captcha');
+    const input = inputEl || qf('#captcha') || document.querySelector('#captcha');
     if (!input) return Promise.resolve();
     const r = input.getBoundingClientRect();
     // 看不见就别演了（滚出视口 / 隐藏）
@@ -612,7 +645,8 @@
       align-items: center; justify-content: center; background: rgba(15,23,42,.45);
     `;
     box.innerHTML = `
-      <div style="background:#fff;border-radius:12px;padding:20px 22px;width:360px;
+      <div style="background:#fff;border-radius:12px;padding:20px 22px;width:min(360px, calc(100vw - 28px));
+                  max-height:calc(100vh - 32px);overflow:auto;
                   box-shadow:0 20px 50px rgba(0,0,0,.25);color:#1e293b;
                   font:13px/1.6 -apple-system,'Microsoft YaHei',sans-serif;">
         <div style="font-size:15px;font-weight:600;margin-bottom:14px;">登录设置</div>
@@ -622,8 +656,8 @@
                       border-radius:6px;margin-bottom:8px;cursor:pointer;">
           <input type="radio" name="hbut-mode" value="edge" ${mode === 'edge' ? 'checked' : ''}
                  style="margin-top:2px;">
-          <span><b style="font-weight:600;">用 Edge 已保存的密码</b><br>
-            <span style="font-size:11.5px;color:#64748b;">脚本不存密码。每次需要你点一下账号框选账号。</span></span>
+          <span><b style="font-weight:600;">用浏览器已保存的密码（自动填充）</b><br>
+            <span style="font-size:11.5px;color:#64748b;">脚本不存密码。桌面端点一下账号框即可；手机端浏览器默认自动填充。</span></span>
         </label>
         <label style="display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid #e2e8f0;
                       border-radius:6px;margin-bottom:14px;cursor:pointer;">
@@ -636,12 +670,12 @@
         <div id="hbut-cred-fields" style="display:${mode === 'stored' ? 'block' : 'none'};">
           <div style="font-size:12px;color:#64748b;margin-bottom:4px;">学号 / 工号</div>
           <input id="hbut-u" type="text" value="${user}" autocomplete="off"
-            style="width:100%;padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;
-                   font-size:13px;margin-bottom:10px;">
+            style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;
+                   font-size:16px;min-height:42px;margin-bottom:10px;">
           <div style="font-size:12px;color:#64748b;margin-bottom:4px;">密码</div>
           <input id="hbut-p" type="password" autocomplete="off" placeholder="留空则不修改"
-            style="width:100%;padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;
-                   font-size:13px;margin-bottom:14px;">
+            style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px;
+                   font-size:16px;min-height:42px;margin-bottom:14px;">
         </div>
 
         <div style="display:flex;gap:8px;">
@@ -674,8 +708,8 @@
         setAccount(u + '（脚本保存）');
         setStatus('已保存账号，正在登录…', 'ok');
       } else {
-        setAccount('Edge 密码管理器');
-        setStatus('已切换到 Edge 密码模式，刷新页面生效', 'ok');
+        setAccount(IS_MOBILE ? '浏览器自动填充' : '浏览器密码管理器');
+        setStatus('已切换到浏览器密码模式，刷新页面生效', 'ok');
       }
       box.remove();
       // 不在这里直接重跑：当前那轮流程可能还挂在"等账号密码"上，
@@ -731,7 +765,8 @@
         align-items:center;justify-content:center;background:rgba(15,23,42,.45);
         font:13px/1.7 -apple-system,'Microsoft YaHei',sans-serif;`;
       box.innerHTML = `
-        <div style="background:#fff;border-radius:12px;padding:22px 24px;width:400px;
+        <div style="background:#fff;border-radius:12px;padding:22px 24px;width:min(400px, calc(100vw - 28px));
+                    max-height:calc(100vh - 32px);overflow:auto;
                     box-shadow:0 20px 50px rgba(0,0,0,.25);color:#1e293b;">
           <div style="font-size:15px;font-weight:600;margin-bottom:8px;">导入识别模型</div>
           <div style="color:#475569;margin-bottom:12px;">
@@ -1084,7 +1119,7 @@
   // =========================================================================
   // 页面交互
   // =========================================================================
-  const captchaImg = () => $(F + ' #captchaImg');
+  const captchaImg = () => qf('#captchaImg') || document.querySelector('#captchaImg');
 
   function refreshCaptcha() {
     return new Promise((resolve) => {
@@ -1100,8 +1135,8 @@
   }
 
   function prepareInputs() {
-    const u = $(F + ' #username');
-    const p = $(F + ' #password');
+    const u = qf('#username');
+    const p = qf('#password');
     if (u) { u.setAttribute('autocomplete', 'username'); u.removeAttribute('readonly'); }
     if (p) {
       p.setAttribute('autocomplete', 'current-password');
@@ -1111,8 +1146,8 @@
   }
 
   function fillStored() {
-    const u = $(F + ' #username');
-    const p = $(F + ' #password');
+    const u = qf('#username');
+    const p = qf('#password');
     const user = GM_getValue(K_USER, '');
     const pass = GM_getValue(K_PASS, '');
     if (!user || !pass) return false;
@@ -1127,8 +1162,8 @@
     return new Promise((resolve) => {
       const t0 = Date.now();
       (function poll() {
-        const u = $(F + ' #username');
-        const p = $(F + ' #password');
+        const u = qf('#username');
+        const p = qf('#password');
         if (u && p && u.value.trim() && p.value) return resolve(true);
         if (Date.now() - t0 > timeout) return resolve(false);
         setTimeout(poll, 200);
@@ -1142,11 +1177,14 @@
       setStatus('页面加密函数不可用，无法提交', 'err');
       return false;
     }
-    const form = $(F);
-    const pwdEl = $(F + ' #password');
-    const salt = ($(F + ' #pwdEncryptSalt') || {}).value || '';
-    $(F + ' #saltPassword').value = encrypt(pwdEl.value, salt);
-    $(F + ' #captcha').value = captcha;
+    const form = qf('');
+    const pwdEl = qf('#password');
+    if (!form || !pwdEl) { setStatus('找不到登录表单，无法提交', 'err'); return false; }
+    const salt = (qf('#pwdEncryptSalt') || {}).value || '';
+    const saltEl = qf('#saltPassword');
+    if (saltEl) saltEl.value = encrypt(pwdEl.value, salt);
+    const capEl = qf('#captcha');
+    if (capEl) capEl.value = captcha;
     pwdEl.disabled = true;
     form.submit();
     return true;
@@ -1161,8 +1199,14 @@
   }
 
   function failTip() {
-    const el = $(F + ' #showErrorTip');
-    return el ? (el.innerText || '').trim() : '';
+    // 电脑端错误提示在 #showErrorTip，手机端在 #formErrorTip2，两个都查
+    const ids = ['#showErrorTip', '#formErrorTip2'];
+    for (const id of ids) {
+      const el = qf(id) || document.querySelector(id);
+      const t = el ? (el.innerText || el.textContent || '').trim() : '';
+      if (t) return t;
+    }
+    return '';
   }
 
   // =========================================================================
@@ -1341,7 +1385,7 @@
       await waitFor(() => document.body, 10000);
       buildPanel();
 
-      const formReady = await waitFor(() => $(F + ' #username') && $(F + ' #password'));
+      const formReady = await waitFor(() => qf('#username') && qf('#password'));
       if (!formReady) {
         setStatus('当前不是账号密码登录页', 'warn');
         return;
@@ -1395,16 +1439,24 @@
         fillStored();
         credOk = true;
       } else {
-        setAccount('Edge 密码管理器');
-        const uEl = $(F + ' #username');
-        if (uEl && !uEl.value) { try { uEl.focus(); } catch (e) {} }
-        setStatus('请点账号框，选择 Edge 保存的账号密码', 'warn');
-        credOk = await waitCredentials(WAIT_CRED_MS);
+        setAccount(IS_MOBILE ? '浏览器自动填充' : '浏览器密码管理器');
+        const uEl = qf('#username');
+        if (IS_MOBILE) {
+          // 手机端浏览器默认自动填充，不用手动点选，安静等它填好即可
+          setStatus('正在等待浏览器自动填充账号密码…', 'busy');
+          credOk = await waitCredentials(WAIT_CRED_MS);
+          // 万一没自动填充，轻触账号框唤起填充面板，再等一轮
+          if (!credOk && uEl) { try { uEl.focus(); } catch (e) {} credOk = await waitCredentials(6000); }
+        } else {
+          if (uEl && !uEl.value) { try { uEl.focus(); } catch (e) {} }
+          setStatus('请点账号框，选择浏览器保存的账号密码', 'warn');
+          credOk = await waitCredentials(WAIT_CRED_MS);
+        }
         if (!credOk) {
           setStatus('没等到账号密码。可以点「设置」改用脚本保存账号，或手动登录', 'warn');
           return;
         }
-        setAccount(($(F + ' #username') || {}).value || '已填充');
+        setAccount((qf('#username') || {}).value || '已填充');
       }
 
       // ---- OCR 与识别 ----
@@ -1434,7 +1486,7 @@
       if (!captcha) {
         if (!best) {
           setStatus('验证码识别不出来，请手动输入后点「立即登录」', 'err');
-          const cap = $(F + ' #captcha');
+          const cap = qf('#captcha');
           if (cap) cap.focus();
           return;
         }
@@ -1454,8 +1506,8 @@
 
   // 手动触发一次（页面上的绿色「一键登录」按钮）
   async function manualLogin() {
-    const u = $(F + ' #username');
-    const p = $(F + ' #password');
+    const u = qf('#username');
+    const p = qf('#password');
     if (!u || !p) { setStatus('不在登录页，无法执行', 'err'); return; }
 
     // 没填账号密码就别往下跑，不然会白等 60 秒
@@ -1506,7 +1558,7 @@
       buildPanel();
       setStatus('本次已跳过自动登录，可手动点「一键登录」', 'info');
       // 跳过自动登录，但手动入口还是留着
-      waitFor(() => $(F + ' #login_submit'), 8000).then(injectQuickButton);
+      waitFor(() => qf('#login_submit'), 8000).then(injectQuickButton);
     });
   } else {
     runFlow().catch((e) => {

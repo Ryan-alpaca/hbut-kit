@@ -3,7 +3,9 @@
 打开 `auth.hbut.edu.cn` 登录页，脚本自动认出图形验证码并提交登录。
 **OCR 完全跑在浏览器里**，不需要任何后台程序、不需要服务器。
 
-> 当前版本：**v3.7.0** · 适用页面：`auth.hbut.edu.cn`（统一认证）、`epay.hbut.edu.cn`（缴费平台，仅 http）
+**电脑（Edge / Chrome）和 Android 手机都能用**，手机端见「[二·五、手机端](#二五手机端android)」。
+
+> 当前版本：**v3.8.0** · 适用页面：`auth.hbut.edu.cn`（统一认证）、`epay.hbut.edu.cn`（缴费平台，仅 http）
 
 ---
 
@@ -62,6 +64,32 @@ tarball 是 gzip 压缩的 tar 包，脚本用浏览器原生的 `DecompressionS
 **只有 5 个源全部失败时**才会弹手动选择面板 —— 那时手动选本地的 `models/captcha_cropped.onnx` 即可。
 
 > ⚠️ 脚本 `@require` 了 `registry.npmmirror.com` 上的 `onnxruntime-web`。如果这个 CDN 不可达，脚本会尝试 unpkg / jsDelivr 上的备用副本。
+
+---
+
+## 二·五、手机端（Android）
+
+**支持范围**：Android 手机 + 一个能装扩展的浏览器。推荐 **Kiwi Browser**（基于 Chromium，
+可直接装 Edge / Chrome 扩展商店里的「篡改猴」）。装好篡改猴后，按电脑端第 2 步把脚本贴进去即可，
+**脚本代码不用改**。
+
+**iOS 不支持**：iPhone 的 Safari 不允许运行篡改猴这类注入脚本，本方案在 iOS 上无法工作。
+若必须在 iPhone 上用，只能手动填密码 + 手动输验证码，或用学校其他登录方式。
+
+**手机端和电脑端的差异（脚本已自动处理，你不用管）**：
+
+| 差异 | 电脑端 | 手机端 |
+|---|---|---|
+| 密码登录表单 | `#pwdFromId` | `#loginFromId`，且页面里重复两次 |
+| 错误提示 | `#showErrorTip` | `#formErrorTip2` |
+| 账号密码 | 需点一下账号框选账号 | 浏览器默认自动填充 |
+
+脚本按「**含密码框的那个 form**」定位，不依赖 id —— 所以两边都能抓对，也不会误抓短信 tab。
+
+**手机端已知限制**：
+
+- 若页面默认停在「短信验证码登录」标签，脚本找不到密码框，需先手动切到**账号密码**标签。
+- `wasm` 性能因机型而异。首次要下 5MB 模型（之后走 IndexedDB 缓存），低端机会慢几秒。
 
 ---
 
